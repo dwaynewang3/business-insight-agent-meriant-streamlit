@@ -9,8 +9,8 @@ question, grouped by session, with a generation for each Claude call (tokens, an
 our code computed) and a span for each tool call (its input and how many rows came back).
 Each approval decision is its own trace in the same session, linked to its question by the
 run ID, with a span for each ticket or alert it created.
-Query result rows are not sent: they stay in the local trace, so no warehouse data, including
-personal data, leaves the machine through tracing.
+Query result rows are not sent: they stay in the local trace. The question, the answer's text
+and its SQL are sent, so a name in a fraud team lead's answer isn't masked.
 
 A user's rating of an answer (thumbs up or down, with an optional note) is an event in the
 session's trace, a line in the feedback file beside the traces folder, and a score on the
