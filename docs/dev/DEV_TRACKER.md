@@ -15,7 +15,7 @@
 | Repo URL | https://github.com/dwaynewang3/business-insights-agent (private until your go-ahead; renamed from Business-Insight-Agent on 2026-11-12) |
 | Demo deadline | None (no fixed date) |
 | Constraints | Total cost under A$50 for the whole project (from 2026-10-18; was USD 200); no real data or database, so data is synthetic or public |
-| Current phase | Phase 8: Ship (everything is built and committed on the local branch `publish`; pushing, going public and deploying the demo wait for you) |
+| Current phase | Phase 8: Ship (everything is built and committed as a fresh history on the local branch `publish`; pushing it, going public and deploying the demo wait for you) |
 
 ## What the Project Must Show
 
@@ -97,7 +97,7 @@ Phase checklists live only in [DEV_PLAN.md](DEV_PLAN.md) section 8, so there's o
 | Done | Build the guided demo in the UI | `app/guide.py`: an opening screen, eight saved answers with what to look for and what to open, a closing screen; tests check each note against its saved run |
 | Done | Write step-by-step demo setup in the README | Seven steps from installing the tools to stopping the demo, then live mode; followed in a fresh copy, where the demo was up 43 s after `make demo` |
 | Done | Review the project before publishing and apply the fixes | Per-question costs corrected, stale documents updated, a Tracing and feedback section, `docs/evaluation.md`, the 24 decisions still marked for review confirmed |
-| Done | Rename the repo and prepare a fresh git history | `business-insights-agent`; the finished project in 11 commits by area, under GitHub's no-reply address, on the local branch `publish` (not pushed yet) |
+| Done | Rename the repo and prepare a fresh git history | `business-insights-agent`; the finished project in 11 commits by area, under GitHub's no-reply address, on the local branch `publish`, ready to replace `main` |
 
 ## Decision Log
 
@@ -210,6 +210,7 @@ Record each major choice so the README can explain the reasoning.
 | 2026-11-12 | The GitHub repo is renamed `business-insights-agent` | Keep `Business-Insight-Agent` | It matches the project's name and the package's; GitHub redirects the old address |
 | 2026-11-12 | Push to the repo while it's still private, so CI builds the new Docker image before anything is public (replaces the 2026-11-10 rule of no push); going public and deploying still wait for your go-ahead | Keep everything local until the go-ahead | A failed Docker build should be found while the repo is private |
 | 2026-11-12 | The licence and the package name Lei Wang as the author | "The Business Insights Agent authors" | A visitor otherwise sees only the GitHub handle |
+| 2026-11-12 | The repo stays private for now, and the demo isn't deployed yet | Go public once CI passes | Your decision: you may still make changes |
 | 2026-11-12 | *For review:* the five early trial runs stay in `evals/results/`, against the review's suggestion to remove them | Remove them | They're the evidence for two decisions: the four runs of rejected requests behind inline citations, and the stopped run that showed the region names read two ways. Only 4 of the 424 entries in Saved runs come from them |
 
 ## Blockers
@@ -239,10 +240,10 @@ Newest entries first.
   - The 24 decisions still marked for review are confirmed as built.
   - The five early trial runs stay in `evals/results/` (see the Decision Log); the review had misread them as superseded.
 - **The GitHub repo is renamed `business-insights-agent`** (still private); the local remote points to the new address.
-- **Fresh git history built, not pushed:** the finished project in 11 commits by area, under GitHub's no-reply address, on the local branch `publish`. The earlier 14 commits are kept in the local branch `backup/history-before-2026-11-12`. Replacing `main` on GitHub with it and deleting the remote branch `scope-review-fixes` (which has nothing `main` lacks) were blocked by this session's permission settings, so both wait for you.
+- **Fresh git history built** on the local branch `publish`: the finished project in commits by area, under GitHub's no-reply address. The earlier 14 commits are kept in the local branch `backup/history-before-2026-11-12`. You approved pushing it over `main` and deleting the remote branch `scope-review-fixes` (which has nothing `main` lacks), but Claude Code's permission settings refused both in this session, so they're yours to run: `git push --force-with-lease origin publish:main`, then `git push origin --delete scope-review-fixes`. CI then builds the new Docker image for the first time.
 - **A Langfuse trace in the README** (`docs/images/langfuse-trace.png`, your screenshot, cropped to the trace): the New South Wales question asked live as the Head of Claims, 43 s, US$0.113 and 97k tokens, with a `run_sql` step selected to show SQL going in and only a row count coming back. Ledger after it: $30.45 of $32.
 - 659 tests pass; lint is clean; every link in the Markdown files resolves.
-- Waiting on you: first, the push of `publish` over `main` (run it yourself or allow it), after which CI builds the new Docker image for the first time; then the go-ahead to make the repo public, deploy to Streamlit Community Cloud (`app/main.py`, Python 3.13, no secrets) and add the demo's link to the README. Optional before that: the GitHub repository and token in `.env` so live mode opens issues.
+- Waiting on you: the push above; then (your decision: not public yet, you may still make changes) the go-ahead to make the repo public, then deploy to Streamlit Community Cloud (`app/main.py`, Python 3.13, no secrets) and add the demo's link to the README. Optional before that: the GitHub repository and token in `.env` so live mode opens issues.
 
 ### 2026-11-10
 - **Project review**, then every fix from it, with no paid API calls (ledger unchanged at $30.33 of $32). 651 tests pass; lint is clean. Nothing is committed or pushed.

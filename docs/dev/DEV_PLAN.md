@@ -1,6 +1,6 @@
 # Development Plan: Business Insights Agent
 
-> Status: Phases 0–7 complete (a guided demo in the UI replaced the demo video on 2026-11-10); Phase 8 (publishing): committed as a fresh history on the local branch `publish` on 2026-11-12; pushing, going public and deploying wait for the go-ahead. The v1 scope was frozen on 2026-10-04 ([docs/scoping.md](../scoping.md)) and revised on 2026-10-16: the customer moves to the Australian market and policy compliance is added ([docs/meridian_design.md](../meridian_design.md)). · Created: 2026-10-03 · Revised: 2026-10-08, after a plan review (security, evals, order of work, budget)
+> Status: Phases 0–7 complete (a guided demo in the UI replaced the demo video on 2026-11-10); Phase 8 (publishing): committed as a fresh history on the local branch `publish` on 2026-11-12; pushing it, going public and deploying wait for the go-ahead. The v1 scope was frozen on 2026-10-04 ([docs/scoping.md](../scoping.md)) and revised on 2026-10-16: the customer moves to the Australian market and policy compliance is added ([docs/meridian_design.md](../meridian_design.md)). · Created: 2026-10-03 · Revised: 2026-10-08, after a plan review (security, evals, order of work, budget)
 > Progress, decisions and blockers are tracked in [DEV_TRACKER.md](DEV_TRACKER.md). This file is the reference plan.
 
 ## 1. Summary
