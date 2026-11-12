@@ -1,0 +1,35 @@
+# Lint and the offline test suite on every push and pull request. No API calls: the agent's
+# tests use a scripted stand-in for Claude, so this costs nothing.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # this action publishes no moving major tag
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run python -m data.generator --scenario data/scenarios/dev.yaml
+      - run: uv run pytest -q
+
+  docker:
+    # The optional Dockerfile: build the image, start the UI without an API key, and check that it
+    # answers. Nothing here needs an API key.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t business-insights-agent .
+      - run: docker run -d --name demo -p 8501:8501 business-insights-agent
+      - name: Wait for the UI's health check
+        run: |
+          for attempt in $(seq 1 30); do
+            curl -sf http://localhost:8501/_stcore/health && exit 0
+            sleep 2
+          done
+          docker logs demo
+          exit 1

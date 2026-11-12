@@ -1,0 +1,37 @@
+# Live evals call Claude and cost money, so they run only when started by hand
+# (Actions > Evals > Run workflow). They need the ANTHROPIC_API_KEY repository secret, and
+# stop once the run's cost passes max_cost.
+name: Evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "what, why, safety or followup"
+        default: what
+      subset:
+        description: "a name from evals/subsets.yaml, or empty for every case of that kind"
+        default: smoke
+      max_cost:
+        description: "stop the run past this many USD"
+        default: "1.00"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      LANGFUSE_TRACING_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # this action publishes no moving major tag
+      - run: uv sync --frozen
+      - run: uv run python -m data.generator --scenario data/scenarios/dev.yaml
+      - run: >-
+          uv run python -m evals.run_evals --kind "${{ inputs.kind }}"
+          ${{ inputs.subset && format('--subset {0}', inputs.subset) || '' }}
+          --max-cost "${{ inputs.max_cost }}" --name ci
+      - uses: actions/upload-artifact@v7
+        with:
+          name: eval-results
+          path: evals/results/*-ci/
