@@ -1,0 +1,545 @@
+# "What" cases: questions with one correct table of numbers, for the dev data.
+#
+# Each template is a question pattern with reference SQL written by hand, plus the parameter
+# sets it's asked with. evals/cases/loader.py expands them into cases, and
+# `uv run python -m evals.cases` prints every question.
+#
+# The reference SQL is written by hand, not by the semantic layer's compiler, because
+# Experiment 1 tests the compiler. The tests check each template against the semantic layer
+# wherever an agreed metric covers it, so a mistake in either one shows up.
+#
+# Template fields:
+#   question   the question, with {placeholders} filled from the parameters
+#   role       who asks it: head_of_claims, claims_ops_manager, actuarial_analyst, fraud_team_lead
+#   keys       columns that identify a row, and how the grader compares them:
+#                text         case-insensitive text
+#                state        state or territory code, or its name
+#                month        any date in the month
+#                adjuster     adjuster ID or name
+#                repair_shop  shop ID or name
+#   values     numeric columns to compare (within 0.5%), and their unit:
+#                count, aud, days, policies, per_1000_policy_months,
+#                ratio (0.25 and 25% are both accepted)
+#              A row whose values are all zero counts the same as a missing row, so listing
+#              the adjusters who left with 0 open claims is as right as leaving them out.
+#   sql        reference SQL. It returns the keys, then the values, in the order listed.
+#   semantic   the equivalent agreed-metric request (MetricRequest fields), if there is one
+#   cases      the parameter sets
+#
+# Parameters:
+#   period        2025, 2025-H1, 2025-Q3, 2026-07, or a month range like 2025-10..2026-09.
+#                 The SQL gets {start} and {end}; the question gets {period_label}.
+#                 A list of periods means each one is a fair reading of the question, such as
+#                 "the last 12 months" with or without the incomplete latest month. Give
+#                 period_label too.
+#   period_b      a second period, for comparisons: {start_b}, {end_b}, {period_b_label}
+#   state         state or territory code; the question also gets {state_name}
+#   cause         cause of loss; the question also gets {cause_label}
+#   question      replaces the template's question for one case
+#
+# {payments} in SQL stands for the claim_payments table. Where the answer depends on payments,
+# the answer without the known duplicate load below is accepted too, because leaving out rows
+# that were loaded twice is a fair choice.
+
+known_duplicate_batches: [reload-2026-03-14]
+
+templates:
+  claim_frequency_by_state:
+    question: What was the {product} claim frequency by state in {period_label}?
+    role: actuarial_analyst
+    keys: {state: state}
+    values: {claim_frequency: per_1000_policy_months}
+    sql: |
+      WITH claim_counts AS (
+          SELECT state, count(*) AS claims
+          FROM claims
+          WHERE product = '{product}'
+            AND loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY state
+      ),
+      exposure AS (
+          SELECT state, sum(policies_in_force) AS policy_months
+          FROM exposure_monthly
+          WHERE product = '{product}'
+            AND month BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY state
+      )
+      SELECT state, 1000 * claims / policy_months AS claim_frequency
+      FROM claim_counts
+      JOIN exposure USING (state)
+      ORDER BY state
+    semantic: {metric: claim_frequency, dimensions: [state], filters: {product: "{product}"}}
+    cases:
+      - {product: motor, period: 2026-Q2}
+      - {product: home, period: 2026-Q2}
+      - {product: motor, period: 2025-Q1}
+      - {product: home, period: 2025-Q3}
+      - {product: motor, period: 2025-Q4}
+      - {product: home, period: 2026-Q1}
+
+  loss_ratio_by_product:
+    question: What was the loss ratio for each product in {period_label}?
+    role: head_of_claims
+    keys: {product: text}
+    values: {loss_ratio: ratio}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      ),
+      incurred AS (
+          SELECT c.product,
+                 sum(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS incurred_losses
+          FROM claims c
+          LEFT JOIN paid USING (claim_id)
+          WHERE c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY c.product
+      ),
+      premium AS (
+          SELECT product, sum(earned_premium) AS earned_premium
+          FROM exposure_monthly
+          WHERE month BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY product
+      )
+      SELECT product, incurred_losses / earned_premium AS loss_ratio
+      FROM incurred
+      JOIN premium USING (product)
+      ORDER BY product
+    semantic: {metric: loss_ratio, dimensions: [product]}
+    cases:
+      - {period: 2025}
+      - {period: 2026-H1}
+      - {period: 2026-Q2}
+      - question: What is our loss ratio by product over the last 12 months?
+        period: [2025-10..2026-09, 2025-09..2026-08]
+        period_label: the last 12 months
+
+  average_claim_cost:
+    question: What was the average claim cost for {product} claims in {state_name} in {period_label}?
+    role: head_of_claims
+    keys: {}
+    values: {average_claim_cost: aud}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      )
+      SELECT avg(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS average_claim_cost
+      FROM claims c
+      LEFT JOIN paid USING (claim_id)
+      WHERE c.product = '{product}'
+        AND c.state = '{state}'
+        AND c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+    semantic:
+      metric: average_claim_cost
+      filters: {product: "{product}", state: "{state}"}
+    cases:
+      - {product: motor, state: NSW, period: 2026-Q2}
+      - {product: home, state: QLD, period: 2025}
+      - {product: motor, state: VIC, period: 2025-H1}
+      - {product: home, state: VIC, period: 2026-Q2}
+      - {product: motor, state: WA, period: 2025-Q3}
+      - {product: home, state: NSW, period: 2026-07}
+      - {product: motor, state: SA, period: 2025-Q2}
+      - {product: home, state: TAS, period: 2026-H1}
+      - {product: motor, state: QLD, period: 2026-Q3}
+
+  average_claim_cost_by_product:
+    question: What was the average claim cost by product in {period_label}?
+    role: actuarial_analyst
+    keys: {product: text}
+    values: {average_claim_cost: aud}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      )
+      SELECT c.product,
+             avg(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS average_claim_cost
+      FROM claims c
+      LEFT JOIN paid USING (claim_id)
+      WHERE c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY c.product
+      ORDER BY c.product
+    semantic: {metric: average_claim_cost, dimensions: [product]}
+    cases:
+      - {period: 2026-Q2}
+      - {period: 2025}
+      - {period: 2026-Q1}
+
+  claim_count_by_cause:
+    question: >-
+      How many {product} claims did we have in the {region} region in {period_label}, by cause
+      of loss?
+    role: claims_ops_manager
+    keys: {cause: text}
+    values: {claim_count: count}
+    sql: |
+      SELECT cause, count(*) AS claim_count
+      FROM claims
+      WHERE product = '{product}'
+        AND region = '{region}'
+        AND loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY cause
+      ORDER BY cause
+    semantic:
+      metric: claim_count
+      dimensions: [cause]
+      filters: {product: "{product}", region: "{region}"}
+    cases:
+      - {product: motor, region: VIC & TAS, period: 2025-01}
+      - {product: home, region: VIC & TAS, period: 2026-02}
+      - {product: home, region: West & South, period: 2025-09}
+      - {product: motor, region: NSW & ACT, period: 2026-07}
+      - {product: home, region: QLD & NT, period: 2026-06}
+      - {product: motor, region: West & South, period: 2025-03}
+      - {product: home, region: NSW & ACT, period: 2025-05}
+      - {product: motor, region: QLD & NT, period: 2026-01}
+
+  claim_count_by_month:
+    question: How many claims did we have in {state_name} each month in {period_label}?
+    role: claims_ops_manager
+    keys: {month: month}
+    values: {claim_count: count}
+    sql: |
+      SELECT CAST(date_trunc('month', loss_date) AS DATE) AS month, count(*) AS claim_count
+      FROM claims
+      WHERE state = '{state}'
+        AND loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY ALL
+      ORDER BY month
+    semantic: {metric: claim_count, grain: month, filters: {state: "{state}"}}
+    cases:
+      - {state: NSW, period: 2025}
+      - {state: WA, period: 2025}
+      - {state: QLD, period: 2026-01..2026-09}
+      - {state: VIC, period: 2026-H1}
+
+  open_claims_by_adjuster:
+    question: How many open claims does each {region} adjuster have?
+    role: claims_ops_manager
+    keys: {adjuster_id: adjuster}
+    values: {open_claims: count}
+    sql: |
+      SELECT c.adjuster_id, count(*) AS open_claims
+      FROM claims c
+      JOIN adjusters a USING (adjuster_id)
+      WHERE c.status = 'open'
+        AND a.region = '{region}'
+      GROUP BY c.adjuster_id
+      ORDER BY c.adjuster_id
+    semantic:
+      metric: open_claims
+      dimensions: [adjuster_id]
+      filters: {region: "{region}"}
+    cases:
+      - {region: West & South}
+      - {region: NSW & ACT}
+      - {region: VIC & TAS}
+      - {region: QLD & NT}
+
+  median_cycle_time_by_region:
+    question: What was the median cycle time by region for claims reported in {period_label}?
+    role: claims_ops_manager
+    keys: {region: text}
+    values: {cycle_time_days: days}
+    sql: |
+      SELECT region, median(close_date - report_date) AS cycle_time_days
+      FROM claims
+      WHERE status = 'closed'
+        AND report_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY region
+      ORDER BY region
+    semantic: {metric: cycle_time_days, dimensions: [region]}
+    cases:
+      - {period: 2025-Q1}
+      - {period: 2025-Q3}
+      - {period: 2026-Q1}
+      - {period: 2026-Q2}
+
+  paid_amount_by_month:
+    question: How much did we pay out on claims each month in {period_label}?
+    role: head_of_claims
+    keys: {month: month}
+    values: {paid_amount: aud}
+    sql: |
+      SELECT CAST(date_trunc('month', payment_date) AS DATE) AS month,
+             sum(amount) AS paid_amount
+      FROM {payments} AS payments
+      WHERE payment_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY ALL
+      ORDER BY month
+    semantic: {metric: paid_amount, grain: month}
+    cases:
+      - {period: 2026-Q1}
+      - {period: 2025-H2}
+      - {period: 2026-Q2}
+
+  paid_amount_by_payee:
+    question: How much did we pay out on claims in {period_label}, by payee type?
+    role: head_of_claims
+    keys: {payee_type: text}
+    values: {paid_amount: aud}
+    sql: |
+      SELECT payee_type, sum(amount) AS paid_amount
+      FROM {payments} AS payments
+      WHERE payment_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY payee_type
+      ORDER BY payee_type
+    semantic: {metric: paid_amount, dimensions: [payee_type]}
+    cases:
+      - {period: 2025-06}
+      - {period: 2026-03}
+      - {period: 2026-08}
+
+  policies_in_force_by_state:
+    question: On average, how many {product} policies were in force in {period_label}, by state?
+    role: actuarial_analyst
+    keys: {state: state}
+    values: {policies_in_force: policies}
+    sql: |
+      SELECT state, sum(policies_in_force) / count(DISTINCT month) AS policies_in_force
+      FROM exposure_monthly
+      WHERE product = '{product}'
+        AND month BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY state
+      ORDER BY state
+    semantic:
+      metric: policies_in_force
+      dimensions: [state]
+      filters: {product: "{product}"}
+    cases:
+      - {product: home, period: 2026-06}
+      - {product: motor, period: 2025-12}
+      - {product: home, period: 2025}
+
+  earned_premium_by_product:
+    question: What was our earned premium by product in {period_label}?
+    role: head_of_claims
+    keys: {product: text}
+    values: {earned_premium: aud}
+    sql: |
+      SELECT product, sum(earned_premium) AS earned_premium
+      FROM exposure_monthly
+      WHERE month BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY product
+      ORDER BY product
+    semantic: {metric: earned_premium, dimensions: [product]}
+    cases:
+      - {period: 2025}
+      - {period: 2026-H1}
+      - {period: 2026-Q3}
+
+  claim_count_by_channel:
+    question: How many {product} claims came through each sales channel in {period_label}?
+    role: head_of_claims
+    keys: {channel: text}
+    values: {claim_count: count}
+    sql: |
+      SELECT p.channel, count(*) AS claim_count
+      FROM claims c
+      JOIN policies p USING (policy_id)
+      WHERE c.product = '{product}'
+        AND c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY p.channel
+      ORDER BY p.channel
+    semantic:
+      metric: claim_count
+      dimensions: [channel]
+      filters: {product: "{product}"}
+    cases:
+      - {product: home, period: 2025}
+      - {product: home, period: 2026-H1}
+      - {product: motor, period: 2026-Q3}
+
+  top_states_by_loss_ratio:
+    question: Which {n} states had the highest {product} loss ratio in {period_label}?
+    role: head_of_claims
+    keys: {state: state}
+    values: {loss_ratio: ratio}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      ),
+      incurred AS (
+          SELECT c.state,
+                 sum(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS incurred_losses
+          FROM claims c
+          LEFT JOIN paid USING (claim_id)
+          WHERE c.product = '{product}'
+            AND c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY c.state
+      ),
+      premium AS (
+          SELECT state, sum(earned_premium) AS earned_premium
+          FROM exposure_monthly
+          WHERE product = '{product}'
+            AND month BETWEEN DATE '{start}' AND DATE '{end}'
+          GROUP BY state
+      )
+      SELECT state, incurred_losses / earned_premium AS loss_ratio
+      FROM incurred
+      JOIN premium USING (state)
+      ORDER BY loss_ratio DESC
+      LIMIT {n}
+    cases:
+      - {n: 3, product: home, period: 2025}
+      - {n: 3, product: motor, period: 2026-H1}
+      - {n: 2, product: motor, period: 2025}
+
+  cause_share:
+    question: What share of {product} claims in {period_label} were {cause_label} claims?
+    role: actuarial_analyst
+    keys: {}
+    values: {share: ratio}
+    sql: |
+      SELECT count(*) FILTER (WHERE cause = '{cause}') / count(*) AS share
+      FROM claims
+      WHERE product = '{product}'
+        AND loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+    cases:
+      - {product: motor, cause: glass, period: 2026-Q1}
+      - {product: home, cause: water_damage, period: 2025}
+      - {product: motor, cause: storm, period: 2026-Q3}
+      - {product: home, cause: storm, period: 2026-Q3}
+
+  claim_count_change:
+    question: >-
+      By what percentage did the number of {product} claims change from {period_label} to
+      {period_b_label}?
+    role: actuarial_analyst
+    keys: {}
+    values: {percent_change: ratio}
+    sql: |
+      SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '{start_b}' AND DATE '{end_b}')
+             / count(*) FILTER (WHERE loss_date BETWEEN DATE '{start}' AND DATE '{end}')
+             - 1 AS percent_change
+      FROM claims
+      WHERE product = '{product}'
+    cases:
+      - {product: home, period: 2025-Q2, period_b: 2026-Q2}
+      - {product: motor, period: 2025-H1, period_b: 2026-H1}
+      - {product: home, period: 2025-Q1, period_b: 2026-Q1}
+
+  shop_average_claim_cost:
+    question: What was the average claim cost at each {metro} repair shop in {period_label}?
+    role: fraud_team_lead
+    keys: {repair_shop_id: repair_shop}
+    values: {average_claim_cost: aud}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      )
+      SELECT c.repair_shop_id,
+             avg(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS average_claim_cost
+      FROM claims c
+      JOIN repair_shops s USING (repair_shop_id)
+      LEFT JOIN paid USING (claim_id)
+      WHERE s.metro = '{metro}'
+        AND c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+      GROUP BY c.repair_shop_id
+      ORDER BY c.repair_shop_id
+    semantic:
+      metric: average_claim_cost
+      dimensions: [repair_shop_id]
+      filters: {metro: "{metro}"}
+    cases:
+      - {metro: Melbourne, period: 2025}
+      - {metro: Melbourne, period: 2026-03..2026-09}
+      - {metro: Sydney, period: 2026-H1}
+      - {metro: Brisbane, period: 2025}
+
+  open_claims_by_region:
+    question: How many claims in the {region} region are still open?
+    role: claims_ops_manager
+    keys: {}
+    values: {open_claims: count}
+    sql: |
+      SELECT count(*) AS open_claims
+      FROM claims
+      WHERE status = 'open'
+        AND region = '{region}'
+    semantic: {metric: open_claims, filters: {region: "{region}"}}
+    cases:
+      - {region: NSW & ACT}
+      - {region: QLD & NT}
+      - {region: West & South}
+      - {region: VIC & TAS}
+
+  incurred_losses_total:
+    question: What were the total incurred losses on {product} claims in {period_label}?
+    role: head_of_claims
+    keys: {}
+    values: {incurred_losses: aud}
+    sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date
+          FROM {payments} AS payments
+          GROUP BY claim_id
+      )
+      SELECT sum(c.reserve_amount + coalesce(paid.paid_to_date, 0)) AS incurred_losses
+      FROM claims c
+      LEFT JOIN paid USING (claim_id)
+      WHERE c.product = '{product}'
+        AND c.loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+    semantic: {metric: incurred_losses, filters: {product: "{product}"}}
+    cases:
+      - {product: home, period: 2026-Q3}
+      - {product: motor, period: 2025}
+      - {product: home, period: 2026-Q1}
+
+  # Counts by report date on purpose: the agreed claim count uses the loss date, so the agent
+  # has to notice that "reported in" asks for something else.
+  claims_reported:
+    question: How many claims were reported in {period_label}?
+    role: claims_ops_manager
+    keys: {}
+    values: {claims_reported: count}
+    sql: |
+      SELECT count(*) AS claims_reported
+      FROM claims
+      WHERE report_date BETWEEN DATE '{start}' AND DATE '{end}'
+    cases:
+      - {period: 2026-08}
+      - {period: 2026-01}
+
+  claim_count_total:
+    question: How many claims did we have in {period_label}?
+    role: head_of_claims
+    keys: {}
+    values: {claim_count: count}
+    sql: |
+      SELECT count(*) AS claim_count
+      FROM claims
+      WHERE loss_date BETWEEN DATE '{start}' AND DATE '{end}'
+    semantic: {metric: claim_count}
+    cases:
+      - {period: 2025-Q4}
+      # The extract date is September 30, 2026, so "last month" can fairly mean August
+      # (the last full month) or September (the latest, still incomplete, month).
+      - question: How many claims did we have last month?
+        period: [2026-08, 2026-09]
+        period_label: last month
+
+  paid_amount_total:
+    question: How much did we pay out on claims in {period_label}?
+    role: head_of_claims
+    keys: {}
+    values: {paid_amount: aud}
+    sql: |
+      SELECT sum(amount) AS paid_amount
+      FROM {payments} AS payments
+      WHERE payment_date BETWEEN DATE '{start}' AND DATE '{end}'
+    semantic: {metric: paid_amount}
+    cases:
+      - {period: 2025}
+      - question: How much have we paid out on claims so far this year?
+        period: 2026-01..2026-09
+        period_label: 2026 so far

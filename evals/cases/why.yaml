@@ -1,0 +1,305 @@
+# "Why" cases: investigations of the dev data, with a known cause or with nothing to find.
+#
+# Fields:
+#   kind           incident          a planted incident from the answer key (data/dev_manifest.json)
+#                  background_event  an event in the data that isn't one of the planted
+#                                    incidents (its answer key entry has no explanation)
+#                  control           a pattern that looks notable but is normal (seasonality, noise)
+#                  false_premise     the question assumes something that didn't happen
+#   answer_key     the incident or background event id in the answer key
+#   explanation    the correct answer, when the answer key doesn't give it or isn't specific enough
+#   must_mention   code check: each group needs at least one of its terms in the report
+#                  (case-insensitive). It's a minimum, not the grade: the LLM grader judges
+#                  whether the explanation is right and free of unsupported causes.
+#   flags_data_quality   the report must list a data-quality issue
+#   verify_sql     returns a boolean `ok`: the case's premise holds in the dev data. The tests run
+#                  it, so a change to the generator can't quietly break a case. Planted incidents
+#                  are already checked by tests/test_incidents.py.
+#
+# A case with nothing to find passes only if the agent doesn't invent a cause.
+# Questions are worded as a user would ask, without hints about the answer.
+
+cases:
+  # Planted incidents
+  - id: why-nsw-cost-july-2026
+    question: Why did the average claim cost in New South Wales jump in July 2026?
+    role: head_of_claims
+    kind: incident
+    answer_key: nsw_east_coast_low
+    must_mention:
+      - [WX-003, east coast low]
+      - [Sydney]
+
+  - id: why-repair-shop-outlier
+    question: Is any repair shop an outlier on cost?
+    role: fraud_team_lead
+    kind: incident
+    answer_key: melbourne_shop_inflation
+    must_mention:
+      - [RS-010, Patton Panel & Paint, Patton Panel and Paint]
+      - [ADJ-012, Becky Crane]
+
+  - id: why-melbourne-repair-cost
+    question: Why has the average cost of motor claims at Melbourne repair shops gone up since March 2026?
+    role: head_of_claims
+    kind: incident
+    answer_key: melbourne_shop_inflation
+    must_mention:
+      - [RS-010, Patton Panel & Paint, Patton Panel and Paint]
+    verify_sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date FROM claim_payments GROUP BY claim_id
+      ),
+      melbourne AS (
+          SELECT c.loss_date >= DATE '2026-03-01' AS is_since_march,
+                 c.reserve_amount + coalesce(paid.paid_to_date, 0) AS incurred
+          FROM claims c
+          JOIN repair_shops s USING (repair_shop_id)
+          LEFT JOIN paid USING (claim_id)
+          WHERE s.metro = 'Melbourne'
+      )
+      SELECT avg(incurred) FILTER (WHERE is_since_march) AS average_since_march,
+             avg(incurred) FILTER (WHERE NOT is_since_march) AS average_before,
+             average_since_march >= 1.3 * average_before AS ok
+      FROM melbourne
+
+  - id: why-paid-spike-march-2026
+    question: Why did paid claims spike in early March 2026?
+    role: head_of_claims
+    kind: incident
+    answer_key: duplicate_payment_load
+    flags_data_quality: true
+    must_mention:
+      - [reload-2026-03-14, reload batch, reloaded]
+      - [duplicate, twice, double]
+
+  - id: why-west-south-slower-to-close
+    question: Why are West & South claims taking longer to close since May 2026?
+    role: claims_ops_manager
+    kind: incident
+    answer_key: west_south_adjusters_leave
+    must_mention:
+      - [ADJ-025, ADJ-026, Jamie Jones, Abigail Foster, two adjusters, 2 adjusters,
+         two of the six, two of six]
+
+  - id: why-west-south-open-claims
+    question: Why do West & South adjusters have so many more open claims than adjusters in other regions?
+    role: claims_ops_manager
+    kind: incident
+    answer_key: west_south_adjusters_leave
+    must_mention:
+      - [ADJ-025, ADJ-026, Jamie Jones, Abigail Foster, two adjusters, 2 adjusters,
+         two of the six, two of six]
+
+  - id: why-q2-average-cost
+    question: Average claim cost rose in Q2 2026. Is that a real increase?
+    role: actuarial_analyst
+    kind: incident
+    answer_key: home_partner_growth
+    must_mention:
+      - [mix, share of home, home share, proportion, more home claims, larger share, Simpson]
+
+  - id: why-wa-home-claims
+    question: Why were Western Australia home claims so much higher in the first half of 2026 than a year earlier?
+    role: head_of_claims
+    kind: incident
+    answer_key: home_partner_growth
+    explanation: >-
+      Western Australia's home book grew. The bank partnership that launched in January 2026
+      added home policies, so home policies in force averaged about 2,730 in the first half of
+      2026, up from about 1,750 a year earlier. Home claims rose by about the same share (from
+      67 to 103), so claims per 1,000 home policies stayed at about 6.3 a month. It's growth,
+      not higher risk.
+    must_mention:
+      - [partner, policies in force, more policies, more home policies, policy count,
+         policy growth, exposure]
+    verify_sql: |
+      WITH claim_counts AS (
+          SELECT year(loss_date) AS year, count(*) AS claims
+          FROM claims
+          WHERE state = 'WA' AND product = 'home' AND month(loss_date) <= 6
+          GROUP BY ALL
+      ),
+      exposure AS (
+          SELECT year(month) AS year, sum(policies_in_force) AS policy_months
+          FROM exposure_monthly
+          WHERE state = 'WA' AND product = 'home' AND month(month) <= 6
+          GROUP BY ALL
+      ),
+      by_year AS (
+          SELECT year, claims, policy_months, 1000 * claims / policy_months AS frequency
+          FROM claim_counts JOIN exposure USING (year)
+      ),
+      compared AS (
+          SELECT max(claims) FILTER (WHERE year = 2026) / max(claims) FILTER (WHERE year = 2025)
+                     AS claims_ratio,
+                 max(policy_months) FILTER (WHERE year = 2026)
+                     / max(policy_months) FILTER (WHERE year = 2025) AS policies_ratio,
+                 max(frequency) FILTER (WHERE year = 2026)
+                     / max(frequency) FILTER (WHERE year = 2025) AS frequency_ratio
+          FROM by_year
+      )
+      SELECT *,
+             claims_ratio >= 1.3 AND policies_ratio >= 1.3
+                 AND frequency_ratio BETWEEN 0.9 AND 1.1 AS ok
+      FROM compared
+
+  - id: why-september-low
+    question: Why do the September 2026 numbers look so low?
+    role: head_of_claims
+    kind: incident
+    answer_key: incomplete_latest_month
+    flags_data_quality: true
+    must_mention:
+      - [incomplete, not yet reported, reported late, reporting lag, reporting delay,
+         late report, still being reported, partial]
+
+  # Events in the data that aren't planted incidents
+  - id: why-victoria-home-cost-january-2026
+    question: Why did the average cost of Victorian home claims jump in January 2026?
+    role: claims_ops_manager
+    kind: background_event
+    answer_key: victoria_bushfire_2026
+    explanation: >-
+      A bushfire hit the Ballarat-Bendigo area on 14-16 January 2026 (event WX-002 in
+      weather_events). It caused about 20 extra fire claims on home policies, and fire claims
+      cost far more than other home claims, so the average Victorian home claim in January was
+      about $44,700, roughly double the $20,700 of the six months before.
+    must_mention:
+      - [WX-002, bushfire]
+      - [Ballarat, Bendigo]
+    verify_sql: |
+      WITH paid AS (
+          SELECT claim_id, sum(amount) AS paid_to_date FROM claim_payments GROUP BY claim_id
+      ),
+      home AS (
+          SELECT c.loss_date, c.reserve_amount + coalesce(paid.paid_to_date, 0) AS incurred
+          FROM claims c LEFT JOIN paid USING (claim_id)
+          WHERE c.state = 'VIC' AND c.product = 'home'
+      )
+      SELECT avg(incurred) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-01-31')
+                 AS january,
+             avg(incurred) FILTER (WHERE loss_date BETWEEN DATE '2025-07-01' AND DATE '2025-12-31')
+                 AS usual,
+             january >= 1.8 * usual
+                 AND EXISTS (SELECT 1 FROM weather_events
+                             WHERE event_id = 'WX-002' AND area = 'Ballarat-Bendigo') AS ok
+      FROM home
+
+  - id: why-queensland-claims-november-2025
+    question: Queensland claim counts jumped in November 2025. What happened?
+    role: claims_ops_manager
+    kind: background_event
+    answer_key: brisbane_hail_2025
+    explanation: >-
+      A moderate hailstorm hit Brisbane on 12-13 November 2025 (event WX-001 in weather_events).
+      It caused about 37 extra storm claims on motor and home policies, so Queensland claims
+      rose from about 72 a month to 98 in November.
+    must_mention:
+      - [WX-001, hailstorm, hail storm]
+      - [Brisbane]
+    verify_sql: |
+      WITH monthly AS (
+          SELECT month(loss_date) AS month, count(*) AS claims
+          FROM claims
+          WHERE state = 'QLD' AND year(loss_date) = 2025
+          GROUP BY ALL
+      )
+      SELECT max(claims) FILTER (WHERE month = 11) AS november,
+             avg(claims) FILTER (WHERE month <= 10) AS usual,
+             november >= 1.3 * usual
+                 AND EXISTS (SELECT 1 FROM weather_events
+                             WHERE event_id = 'WX-001' AND area = 'Brisbane') AS ok
+      FROM monthly
+
+  # Nothing to find
+  - id: why-queensland-storm-early-2026
+    question: Were home storm claims in Queensland unusual in early 2026?
+    role: claims_ops_manager
+    kind: control
+    answer_key: queensland_storm_season
+
+  - id: why-victoria-claims-september-2025
+    question: Victoria claims went up in September 2025 compared with August. What drove the increase?
+    role: claims_ops_manager
+    kind: control
+    answer_key: monthly_noise
+    explanation: >-
+      Nothing in particular. Victoria claims went from 66 in August 2025 to 71 in September,
+      about 8% more, which is normal month-to-month variation. There's no cause to find.
+    verify_sql: |
+      SELECT count(*) FILTER (WHERE month(loss_date) = 9) AS september,
+             count(*) FILTER (WHERE month(loss_date) = 8) AS august,
+             september > august AND september / august BETWEEN 0.9 AND 1.1 AS ok
+      FROM claims
+      WHERE state = 'VIC'
+        AND loss_date BETWEEN DATE '2025-08-01' AND DATE '2025-09-30'
+
+  - id: why-motor-book-shrinking
+    question: Why is our motor business shrinking this year?
+    role: head_of_claims
+    kind: false_premise
+    explanation: >-
+      It isn't. Motor policies in force averaged about 30,200 a month in 2026, up about 1% from
+      about 29,880 in 2025.
+    verify_sql: |
+      WITH monthly AS (
+          SELECT month, sum(policies_in_force) AS policies
+          FROM exposure_monthly
+          WHERE product = 'motor'
+          GROUP BY month
+      )
+      SELECT avg(policies) FILTER (WHERE year(month) = 2026) AS average_2026,
+             avg(policies) FILTER (WHERE year(month) = 2025) AS average_2025,
+             average_2026 >= average_2025 AS ok
+      FROM monthly
+
+  - id: why-victoria-motor-frequency
+    question: Why did motor claim frequency in Victoria go up in Q2 2026?
+    role: actuarial_analyst
+    kind: false_premise
+    explanation: >-
+      It didn't. Victoria motor claim frequency was about 7.0 claims per 1,000 policies per
+      month in Q2 2026, down from about 7.9 in Q1 2026 and below every one of the previous five
+      quarters (about 7.3 to 8.7).
+    verify_sql: |
+      WITH claim_counts AS (
+          SELECT CAST(date_trunc('quarter', loss_date) AS DATE) AS quarter, count(*) AS claims
+          FROM claims
+          WHERE state = 'VIC' AND product = 'motor'
+          GROUP BY ALL
+      ),
+      exposure AS (
+          SELECT CAST(date_trunc('quarter', month) AS DATE) AS quarter,
+                 sum(policies_in_force) AS policy_months
+          FROM exposure_monthly
+          WHERE state = 'VIC' AND product = 'motor'
+          GROUP BY ALL
+      ),
+      frequency AS (
+          SELECT quarter, 1000 * claims / policy_months AS frequency
+          FROM claim_counts JOIN exposure USING (quarter)
+      )
+      SELECT max(frequency) FILTER (WHERE quarter = DATE '2026-04-01') AS q2_2026,
+             max(frequency) FILTER (WHERE quarter = DATE '2026-01-01') AS q1_2026,
+             max(frequency) FILTER (WHERE quarter < DATE '2026-04-01') AS highest_before,
+             q2_2026 < q1_2026 AND q2_2026 <= highest_before AS ok
+      FROM frequency
+
+  - id: why-june-2026-duplicates
+    question: Why were some claim payments loaded twice in June 2026?
+    role: head_of_claims
+    kind: false_premise
+    explanation: >-
+      They weren't. No June 2026 payment appears twice: each one arrived once, in its nightly
+      batch. The only double load in the data is the reload batch for 2-13 March 2026.
+    verify_sql: |
+      WITH repeated AS (
+          SELECT claim_id, payment_date, amount, payee_type
+          FROM claim_payments
+          WHERE payment_date BETWEEN DATE '2026-06-01' AND DATE '2026-06-30'
+          GROUP BY ALL
+          HAVING count(*) > 1
+      )
+      SELECT count(*) AS repeated_payments, repeated_payments = 0 AS ok
+      FROM repeated
