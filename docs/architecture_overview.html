@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Business Insights Agent Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&family=Public+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; each diagram sits in its own scrollable figure with a short key beside it. */
+:root {
+  --bg: #f5f7f8;
+  --surface: #ffffff;
+  --fg: #17232b;
+  --muted: #55656f;
+  --line: #d6dee2;
+  --accent: #0f6b74;
+  --accent-soft: #e2f0f1;
+  --good: #2c7a3f;
+  --warn: #9a5a00;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171c; --surface: #16222a; --fg: #e3eaee; --muted: #9aaab3; --line: #2a3a44;
+    --accent: #5cc3cc; --accent-soft: #173238; --good: #6ccf86; --warn: #f0b45a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171c; --surface: #16222a; --fg: #e3eaee; --muted: #9aaab3; --line: #2a3a44;
+  --accent: #5cc3cc; --accent-soft: #173238; --good: #6ccf86; --warn: #f0b45a; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+main { max-width: 1040px; margin: 0 auto; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 4.2vw, 40px); line-height: 1.12; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 500; font-size: 16px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); font-size: 16px; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.chip.good { border-color: var(--good); color: var(--good); }
+.chip.warn { border-color: var(--warn); color: var(--warn); }
+section { display: grid; gap: 14px; }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+figure pre.mermaid { margin: 0; min-width: 720px; background: transparent; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+code, .mono { font-family: var(--mono); font-size: 13px; }
+.tag { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+footer { color: var(--muted); font-size: 13px; }
+</style>
+
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Meridian General Insurance · as of 19 Oct 2026</div>
+    <h1>Business Insights Agent Architecture</h1>
+    <p class="lede">An agent that answers "what" and "why" questions about a fictional Australian motor and home insurer's claims data, searches its internal policies, and reviews claim files for compliance. Every finding is backed by the SQL or the policy clause that produced it.</p>
+    <div class="status">
+      <span class="chip good">Phases 0–6 done</span>
+      <span class="chip">631 offline tests pass</span>
+      <span class="chip">US$28.82 of US$32 spent (A$50 cap)</span>
+      <span class="chip warn">Phase 7 next: demo polish and push to GitHub</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>How a question flows</h2>
+    <p>The app fixes the user's role, starts the MCP servers for that role, and runs the LangGraph loop until Claude writes a structured report. Nothing the model calls can write to data; actions wait for a person.</p>
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  U["User<br/>Streamlit UI · CLI"] -->|"question + role"| G
+  subgraph AG ["Agent · agent/graph.py"]
+    direction TB
+    G["LangGraph loop<br/>Claude Sonnet 5.5, medium effort"] --> R["Structured report<br/>answer · SQL · findings · hypotheses<br/>data issues · charts · proposed actions"]
+  end
+  G -->|MCP| W["Warehouse server<br/>one per role"]
+  G -->|MCP| P["Policies server<br/>read-only"]
+  G -->|"agent-side tool"| C["Compliance review<br/>check_claim_compliance"]
+  W --> SG{{"SQL guard<br/>one SELECT · read-only"}}
+  SG --> DW[("dev.duckdb<br/>full copy")]
+  SG --> DR[("dev_restricted.duckdb<br/>no names or emails")]
+  P --> KB[("policies.duckdb<br/>252 clauses · 8 policies")]
+  C --> DR
+  C --> KB
+  C -->|"judge call"| J["Claude<br/>structured output"]
+  R -->|"proposed tickets, alerts"| A{"Person approves?"}
+  A -->|"approved only"| X["Actions server<br/>create_ticket · create_alert<br/>optionally a GitHub issue"]
+  G -.-> L["Spend ledger · local traces · Langfuse"]
+</pre>
+      <figcaption>Solid arrows are calls; the dotted arrow is logging. Every role except the fraud team lead is connected to the copy without personal data.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The tools Claude can call</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tool</th><th>Where</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>search_catalog</code>, <code>describe_table</code></td><td><span class="tag">warehouse</span></td><td>Find tables, columns and metrics in the semantic layer</td></tr>
+          <tr><td><code>get_metric</code>, <code>query_metric</code></td><td><span class="tag">warehouse</span></td><td>Read and compute the company's agreed metric definitions</td></tr>
+          <tr><td><code>run_sql</code></td><td><span class="tag">warehouse</span></td><td>One read-only SELECT, through the SQL guard</td></tr>
+          <tr><td><code>check_data_quality</code></td><td><span class="tag">warehouse</span></td><td>Duplicate loads, incomplete months, gaps</td></tr>
+          <tr><td><code>search_policies</code></td><td><span class="tag">policies</span></td><td>Hybrid search (local embeddings + BM25), only clause versions in force on the date</td></tr>
+          <tr><td><code>get_policy_clause</code></td><td><span class="tag">policies</span></td><td>One clause by ID, in force on a date or all versions</td></tr>
+          <tr><td><code>check_claim_compliance</code></td><td><span class="tag">agent</span></td><td>Review one claim file; its judge cost counts toward the question's US$0.50 cap</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>A compliance review</h2>
+    <p>Three designs were measured. The agent uses full context: the whole policy library fits in one cached prompt. Code, not the model, checks every finding and sets the verdict.</p>
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  F["Claim file<br/>claim_files_derived<br/>96 facts, business days in SQL"] --> D["Dates<br/>incident date: cover, settlement<br/>decision date: procedures"]
+  D --> M["Judge prompt<br/>cached: rules + whole library<br/>then the claim's facts"]
+  M --> J["Judge call<br/>Sonnet 5.5, structured output<br/>reasoning before status"]
+  J --> V{"Checks in code"}
+  V -->|"clause supplied? version in force?<br/>evidence matches the file?<br/>breach has clause and severity?"| AGG["Verdict in code<br/>any breach: non-compliant<br/>any to review: needs review<br/>else compliant"]
+  AGG --> OUT["Verdict card in the UI<br/>compliance_results · compliance_findings"]
+</pre>
+      <figcaption>The checklist design (v1) instead retrieves clauses per area and makes ten judge calls, with one retry when validation fails.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Design (27 claim files, one run each)</th><th>Verdict right</th><th>Required findings</th><th>Traps and controls</th><th>Cost a claim (batch)</th></tr></thead>
+        <tbody>
+          <tr><td>v0, naive RAG</td><td class="num">14/27</td><td class="num">11/22</td><td class="num">2/7</td><td class="num">$0.019</td></tr>
+          <tr><td>v1, checklist RAG</td><td class="num">25/27</td><td class="num">21/22</td><td class="num">6/7</td><td class="num">$0.064</td></tr>
+          <tr><td><strong>Full context (in use)</strong></td><td class="num"><strong>27/27</strong></td><td class="num"><strong>22/22</strong></td><td class="num"><strong>7/7</strong></td><td class="num"><strong>$0.031</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Data and evaluation</h2>
+    <figure>
+<pre class="mermaid">
+flowchart LR
+  S1["scenarios/dev.yaml<br/>seed 20251004"] --> GEN["Seeded generator<br/>data/generator"]
+  S2["scenarios/test.yaml<br/>seed 20261019, new incidents"] --> GEN
+  GEN --> DEV[("dev.duckdb + answer key")]
+  GEN --> TEST[("test.duckdb + answer key")]
+  K["Policy kit<br/>8 policies · 27 claim files"] --> KB[("policies.duckdb")]
+  K --> DEV
+  DEV --> E1["run_evals --suite dev<br/>what · why · safety · follow-up"]
+  TEST --> E2["run_evals --suite test<br/>scored once"]
+  DEV --> E3["compliance_eval<br/>18 dev + 9 held-out files"]
+  KB --> E4["retrieval eval · routing eval"]
+  E1 & E2 --> GR["Graders<br/>re-run the agent's SQL · Opus LLM grader (batch)<br/>key numbers traced to their query"]
+  E3 --> GC["Compliance grader<br/>match by clause and version"]
+</pre>
+      <figcaption>The agent never sees an answer key. The test data was generated once, after all development, and each of its questions was asked once.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Evaluation</th><th>Latest result</th></tr></thead>
+        <tbody>
+          <tr><td>Held-out test data, 22 "what" questions</td><td class="num">22/22 (95% range 85–100%)</td></tr>
+          <tr><td>Held-out test data, 7 "why" questions, incl. a new incident type (early-claim fraud)</td><td class="num">7/7 (65–100%)</td></tr>
+          <tr><td>Policy search, hybrid recall@8</td><td class="num">1.00; versions 5/5</td></tr>
+          <tr><td>Routing (right tool for the question)</td><td class="num">14/16</td></tr>
+          <tr><td>Experiment 2: compliance judge, low vs. medium effort</td><td>Same verdicts; medium kept</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Guardrails in code</h2>
+    <div class="grid">
+      <div class="panel">
+        <h3>Access</h3>
+        <ul>
+          <li>The app sets the role; the user can't change it in conversation.</li>
+          <li>Restricted roles query a warehouse copy with no personal data.</li>
+          <li>One read-only SELECT per query; no files, no extensions, time and size caps.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Trust</h3>
+        <ul>
+          <li>"Agreed metric" labels are set by code from the tool calls.</li>
+          <li>Policy citations are checked against the clauses the tools returned.</li>
+          <li>Key numbers are checked against their own query; rounded ones are marked.</li>
+          <li>Claim notes are treated as data, so an injected instruction is ignored.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Actions and cost</h3>
+        <ul>
+          <li>The model has no tool that writes; a person approves each action.</li>
+          <li>Caps: 24 tool calls and US$0.50 per question, US$0.35 per review.</li>
+          <li>The spend ledger refuses calls past US$32.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where it lives in the repository</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Folder</th><th>Contents</th></tr></thead>
+        <tbody>
+          <tr><td><code>agent/</code></td><td>The graph, model calls, tools, compliance review, citations, report schema, costs, tracing, prompt</td></tr>
+          <tr><td><code>mcp_servers/</code></td><td>Warehouse (with the SQL guard), policies (ingest, embed, search), actions</td></tr>
+          <tr><td><code>app/</code></td><td>Streamlit UI: guided demo, saved runs and live mode, sources, verdict card</td></tr>
+          <tr><td><code>data/</code></td><td>Generator, dev and test scenarios, semantic layer, claim files and policies</td></tr>
+          <tr><td><code>evals/</code></td><td>Runners, graders, dev and test cases, saved results</td></tr>
+          <tr><td><code>docs/</code></td><td>Architecture, decisions, results, demo script, rollout plan, scoping</td></tr>
+          <tr><td><code>tests/</code></td><td>26 modules, no API calls</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Synthetic data throughout. Built with LangGraph, the Anthropic SDK, MCP, DuckDB, Streamlit and Langfuse.</footer>
+</main>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" });
+</script>
+</body>
+</html>
