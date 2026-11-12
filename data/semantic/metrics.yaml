@@ -1,0 +1,130 @@
+# Agreed metric definitions (docs/scoping.md, section 3). The semantic layer compiles them
+# into SQL, so every user and the agent get the same number for the same question.
+#
+# A simple metric is an aggregate over one source, grouped by its time column.
+# A ratio metric divides one metric by another at the same grain; it can only be broken
+# down by dimensions that both of its metrics have. Use whole months for ratio metrics.
+
+sources:
+  claim_facts:
+    description: One row per claim, with its incurred cost and the policy's channel and metro.
+    sql: |
+      SELECT c.*, p.channel, p.metro,
+             coalesce(pay.paid, 0) AS paid_to_date,
+             coalesce(pay.paid, 0) + c.reserve_amount AS incurred,
+             c.close_date - c.report_date AS days_to_close
+      FROM claims c
+      JOIN policies p USING (policy_id)
+      LEFT JOIN (
+          SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id
+      ) pay USING (claim_id)
+    dimensions: [state, region, metro, product, cause, status, channel, adjuster_id, repair_shop_id]
+
+  payment_facts:
+    description: One row per payment, with the claim's location, product and cause.
+    sql: |
+      SELECT pay.*, c.state, c.region, c.product, c.cause, c.adjuster_id, c.repair_shop_id
+      FROM claim_payments pay
+      JOIN claims c USING (claim_id)
+    dimensions: [state, region, product, cause, payee_type, load_batch, adjuster_id, repair_shop_id]
+
+  exposure:
+    description: Policies in force and earned premium per month, state and product.
+    sql: SELECT * FROM exposure_monthly
+    dimensions: [state, region, product]
+
+metrics:
+  claim_count:
+    label: Claim count
+    description: Number of claims, counted by loss date.
+    source: claim_facts
+    time_column: loss_date
+    expression: count(*)
+    unit: claims
+    notes: >-
+      Claims are often reported days or weeks after the loss, so the most recent weeks keep
+      filling in as late reports arrive.
+
+  incurred_losses:
+    label: Incurred losses
+    description: Paid to date plus open reserves, for claims counted by loss date.
+    source: claim_facts
+    time_column: loss_date
+    expression: sum(incurred)
+    unit: AUD
+
+  average_claim_cost:
+    label: Average claim cost
+    description: Incurred amount (paid plus open reserves) divided by claim count, by loss date.
+    source: claim_facts
+    time_column: loss_date
+    expression: sum(incurred) / count(*)
+    unit: AUD
+
+  paid_amount:
+    label: Paid amount
+    description: Sum of claim payments, counted by payment date.
+    source: payment_facts
+    time_column: payment_date
+    expression: sum(amount)
+    unit: AUD
+
+  open_claims:
+    label: Open claims
+    description: Claims still open on the extract date, counted by report date.
+    source: claim_facts
+    time_column: report_date
+    expression: count(*) FILTER (WHERE status = 'open')
+    unit: claims
+
+  cycle_time_days:
+    label: Cycle time
+    description: Median days from report date to close date, for closed claims, by report date.
+    source: claim_facts
+    time_column: report_date
+    expression: median(days_to_close) FILTER (WHERE status = 'closed')
+    unit: days
+    notes: >-
+      Only closed claims count, so the most recent report months look faster than they will
+      end up: their slowest claims are still open.
+
+  policies_in_force:
+    label: Policies in force
+    description: Average number of policies in force per month over the period.
+    source: exposure
+    time_column: month
+    expression: sum(policies_in_force) / count(DISTINCT month)
+    unit: policies
+
+  policy_months:
+    label: Policy-months
+    description: Policies in force added up over the months; the exposure base for claim frequency.
+    source: exposure
+    time_column: month
+    expression: sum(policies_in_force)
+    unit: policy-months
+
+  earned_premium:
+    label: Earned premium
+    description: Premium earned over the period.
+    source: exposure
+    time_column: month
+    expression: sum(earned_premium)
+    unit: AUD
+
+  claim_frequency:
+    label: Claim frequency
+    description: Claims per 1,000 policies in force, per month.
+    type: ratio
+    numerator: claim_count
+    denominator: policy_months
+    scale: 1000
+    unit: claims per 1,000 policies per month
+
+  loss_ratio:
+    label: Loss ratio
+    description: Incurred losses divided by earned premium.
+    type: ratio
+    numerator: incurred_losses
+    denominator: earned_premium
+    unit: ratio
