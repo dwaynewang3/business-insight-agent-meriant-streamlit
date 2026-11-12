@@ -70,6 +70,10 @@ Every answer can be traced to the calls behind it ([agent/tracing.py](agent/trac
 - **Cost:** code computes it from each response's token counts, including cache reads and writes, and records every call in a spend ledger that stops the agent at a set limit.
 - **Feedback:** in live mode each answer can be rated, thumbs up or down, with a note on what was wrong. Ratings go to the session's trace, to `logs/feedback.jsonl` and to the question's Langfuse trace as a score. The answers rated down are the ones to review, and where new eval cases come from.
 
+One question in Langfuse. The selected `run_sql` step shows the SQL that went in and, as output, only how many rows came back:
+
+![A Langfuse trace of the New South Wales question: 43 seconds, US$0.113 and 97k tokens, with each Claude call and tool call in order. The selected run_sql step shows its SQL as input and, as output, that 4 rows came back](docs/images/langfuse-trace.png)
+
 ## Tech stack
 
 Python 3.13 · Claude Sonnet 5.5 (Anthropic SDK) · LangGraph · MCP Python SDK · DuckDB · Langfuse · Streamlit

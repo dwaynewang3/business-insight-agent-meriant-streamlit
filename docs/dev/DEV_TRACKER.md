@@ -240,8 +240,9 @@ Newest entries first.
   - The five early trial runs stay in `evals/results/` (see the Decision Log); the review had misread them as superseded.
 - **The GitHub repo is renamed `business-insights-agent`** (still private); the local remote points to the new address.
 - **Fresh git history built, not pushed:** the finished project in 11 commits by area, under GitHub's no-reply address, on the local branch `publish`. The earlier 14 commits are kept in the local branch `backup/history-before-2026-11-12`. Replacing `main` on GitHub with it and deleting the remote branch `scope-review-fixes` (which has nothing `main` lacks) were blocked by this session's permission settings, so both wait for you.
+- **A Langfuse trace in the README** (`docs/images/langfuse-trace.png`, your screenshot, cropped to the trace): the New South Wales question asked live as the Head of Claims, 43 s, US$0.113 and 97k tokens, with a `run_sql` step selected to show SQL going in and only a row count coming back. Ledger after it: $30.45 of $32.
 - 659 tests pass; lint is clean; every link in the Markdown files resolves.
-- Waiting on you: first, the push of `publish` over `main` (run it yourself or allow it), after which CI builds the new Docker image for the first time; then the go-ahead to make the repo public, deploy to Streamlit Community Cloud (`app/main.py`, Python 3.13, no secrets) and add the demo's link to the README. Optional before that: a screenshot of a Langfuse trace for the README, and the GitHub repository and token in `.env` so live mode opens issues.
+- Waiting on you: first, the push of `publish` over `main` (run it yourself or allow it), after which CI builds the new Docker image for the first time; then the go-ahead to make the repo public, deploy to Streamlit Community Cloud (`app/main.py`, Python 3.13, no secrets) and add the demo's link to the README. Optional before that: the GitHub repository and token in `.env` so live mode opens issues.
 
 ### 2026-11-10
 - **Project review**, then every fix from it, with no paid API calls (ledger unchanged at $30.33 of $32). 651 tests pass; lint is clean. Nothing is committed or pushed.
