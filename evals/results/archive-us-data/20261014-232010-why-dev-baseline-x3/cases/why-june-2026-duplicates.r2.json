@@ -1,0 +1,330 @@
+{
+  "case_id": "why-june-2026-duplicates",
+  "repeat": 2,
+  "question": "Why were some claim payments loaded twice in June 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": false,
+    "category": "unscored",
+    "reason": "Nothing to find: needs the LLM grader (Phase 3)."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "You asked why some claim payments were loaded twice in June 2026. I checked claim_payments for exact duplicates (same claim, date, amount and payee), by payment month and by load batch.",
+    "answer": "The premise is wrong: no payments were loaded twice in June 2026. All 159 duplicated payment rows have payment dates between 2026-03-02 and 2026-03-13. Each one was loaded a second time by a non-nightly batch called 'reload-2026-03-14'. That adds about $893K of double-counted payments to March 2026. June has no duplicates and no rows from non-nightly batches. The data doesn't show why the reload happened. It looks like a manual re-run of the March 2\u201313 payments that overlapped rows already loaded nightly. Someone in data engineering would need to confirm that.",
+    "answer_sql": "WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, sum(n-1) AS extra_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "All 159 duplicate payment rows are in March 2026 and come from the reload-2026-03-14 batch. None are in June 2026.",
+        "evidence_sql": "WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n, count(*) FILTER (WHERE load_batch LIKE 'reload%') r FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, count(*) AS dup_groups, sum(n-1) AS extra_rows, sum(r) AS reload_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1",
+        "key_numbers": [
+          {
+            "label": "Duplicate rows (all March 2026)",
+            "value": 159,
+            "unit": "rows"
+          },
+          {
+            "label": "Double-counted amount",
+            "value": 892998.75,
+            "unit": "USD"
+          },
+          {
+            "label": "June 2026 payments in non-nightly batches",
+            "value": 0,
+            "unit": "rows"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Payments were double-loaded in June 2026",
+        "verdict": "ruled_out",
+        "evidence": "There are no duplicates and no non-nightly batch rows for June payment dates."
+      },
+      {
+        "hypothesis": "A manual reload on 2026-03-14 re-delivered March 2\u201313 payments that were already loaded",
+        "verdict": "supported",
+        "evidence": "All 159 duplicates sit in the reload-2026-03-14 batch and cover payment dates 2026-03-02 to 2026-03-13. The reason for the reload isn't recorded in the data."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows duplicated by the reload-2026-03-14 batch, worth about $893K",
+        "impact": "Paid amount and incurred losses for March 2026 are overstated unless the duplicates are excluded. Claims with those payments are affected."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove or flag 159 duplicate payments from reload-2026-03-14",
+        "reason": "They overstate March 2026 paid amounts by about $893K. Data engineering should also confirm why the reload ran."
+      }
+    ],
+    "open_questions": [
+      "Did you see a June anomaly in a particular report? If so, tell me which one, and I'll check it. It may come from something other than duplicate loads."
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.029856,
+  "seconds": 15.4,
+  "tool_calls": [
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "describe_table",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n, count(*) FILTER (WHERE load_batch LIKE 'reload%') r FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, count(*) AS dup_groups, sum(n-1) AS extra_rows, sum(r) AS reload_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n, count(*) FILTER (WHERE load_batch LIKE 'reload%') r FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, count(*) AS dup_groups, sum(n-1) AS extra_rows, sum(r) AS reload_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) AS june_payments_in_nonnightly_batches FROM claim_payments WHERE payment_date BETWEEN '2026-06-01' AND '2026-06-30' AND load_batch NOT LIKE 'nightly-%'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) AS june_payments_in_nonnightly_batches FROM claim_payments WHERE payment_date BETWEEN '2026-06-01' AND '2026-06-30' AND load_batch NOT LIKE 'nightly-%'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-300129766147",
+      "run_id": "r-1e2fcffbee2e",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 103,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 166,
+      "cost_usd": 0.003032,
+      "seconds": 2.22,
+      "request_id": "req_011Cg294jK54cLmiVMgf9nfy"
+    },
+    {
+      "session_id": "s-300129766147",
+      "run_id": "r-1e2fcffbee2e",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 276,
+      "cache_read_input_tokens": 8061,
+      "cache_creation_input_tokens": 1377,
+      "cost_usd": 0.007819,
+      "seconds": 2.44,
+      "request_id": "req_011Cg294uB9xBzxh3r3gQxqw"
+    },
+    {
+      "session_id": "s-300129766147",
+      "run_id": "r-1e2fcffbee2e",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 134,
+      "cache_read_input_tokens": 9438,
+      "cache_creation_input_tokens": 361,
+      "cost_usd": 0.004134,
+      "seconds": 1.74,
+      "request_id": "req_011Cg2955msxvbbFKX2iJHHw"
+    },
+    {
+      "session_id": "s-300129766147",
+      "run_id": "r-1e2fcffbee2e",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1246,
+      "cache_read_input_tokens": 9799,
+      "cache_creation_input_tokens": 179,
+      "cost_usd": 0.014871,
+      "seconds": 8.58,
+      "request_id": "req_011Cg295DJ4eW9avoFu1k6nw"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove or flag 159 duplicate payments from reload-2026-03-14",
+      "reason": "They overstate March 2026 paid amounts by about $893K. Data engineering should also confirm why the reload ran."
+    }
+  ],
+  "session_id": "s-300129766147",
+  "run_id": "r-1e2fcffbee2e",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 2,
+    "unconfirmed": [
+      {
+        "finding": 0,
+        "label": "June 2026 payments in non-nightly batches",
+        "value": 0,
+        "unit": "rows",
+        "reason": "Not in the result of its finding's SQL."
+      }
+    ]
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why were some claim payments loaded twice in June 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01FST9JoJt7i3drXpysFhfHT",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01DwT59WnBkZkgx4FE9Rr84y",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "describe_table",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01FST9JoJt7i3drXpysFhfHT",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DwT59WnBkZkgx4FE9Rr84y",
+          "content": "{\"table\": \"claim_payments\", \"description\": \"Payments made on claims. One row per payment row loaded into the warehouse.\", \"rows\": 9349, \"columns\": [{\"name\": \"payment_id\", \"type\": \"VARCHAR\", \"description\": \"Unique ID of the payment row, assigned when the row is loaded.\", \"empty\": 0, \"distinct\": 9349, \"examples\": [\"PAY-0000001\", \"PAY-0000002\", \"PAY-0000003\", \"PAY-0000004\", \"PAY-0000005\"]}, {\"name\": \"claim_id\", \"type\": \"VARCHAR\", \"description\": \"Claim the payment belongs to (claims.claim_id).\", \"empty\": 0, \"distinct\": 6131, \"examples\": [\"CLM-004154\", \"CLM-004208\", \"CLM-004227\", \"CLM-004105\", \"CLM-004214\"]}, {\"name\": \"payment_date\", \"type\": \"DATE\", \"description\": \"Date the payment was issued.\", \"empty\": 0, \"min\": \"2025-01-05\", \"max\": \"2026-09-30\"}, {\"name\": \"amount\", \"type\": \"DECIMAL(12,2)\", \"description\": \"Payment amount in USD.\", \"empty\": 0, \"min\": 0.56, \"max\": 237118.89}, {\"name\": \"payee_type\", \"type\": \"VARCHAR\", \"description\": \"Who received the payment.\", \"empty\": 0, \"values\": [\"repair_shop\", \"policyholder\", \"contractor\", \"claimant\"]}, {\"name\": \"load_batch\", \"type\": \"VARCHAR\", \"description\": \"Name of the warehouse load that delivered the row. Payments normally arrive in the nightly batch after the payment date, named nightly-YYYY-MM-DD.\", \"empty\": 0, \"distinct\": 635, \"examples\": [\"reload-2026-03-14\", \"nightly-2026-08-03\", \"nightly-2026-08-05\", \"nightly-2026-09-06\", \"nightly-2026-07-04\"]}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQStwUKEAgSGAI4AUIIdGhpbmtpbmcSDPTuLhAkwAZpxUktJxoMx+Q7CfqnOe8iAUBzIjAtDGq/trt7tUjoayKPjkLBjHtdf6m1xE8WWOTD/nKgbRAcZ+nZXZAWxCwv/KWXvUkq1ARhxy70+ydNQL0SpmbSKlhQ238DhXmadMINZwuyfCt7ssQn3o1QVv7N7TUD+mPM2dAoLiqxkZWoLHyojfRP3GUoQTXt3HYZ5tezDRyrFUbv+ZweYb5NeaCZfMjKqeSgeFvrJNsJwM9oDGAr/+D+/vO8+WTL4rP8rlUCgThYNw/W0RJzXWWTMDrYJ+/wLuwj6/j5El1Gi09+r47IshLuYq1yJXqybO8IjS5BzgpYkmkowOx5xX613j+AxvMC0/TII2WgV+zKBnNKx/Cd3p/w5qOuGlKJ3tpaG82pS7tlkTozmPsUrKufhjFArBr+iMIPYYwmXedHnGmKSC32ls+rhDl9NHaNShj6K2up+yfLgkLZNbuMfpmrYok8pyatGRCbvB6+JJDKeb92T9JOxDsiZmVQ68vDYNFelUow84bQtvDEpe9u79n3rUbV9Zrwo1g4HHa22yIWuD5zP/7CTS1qhfrYTpvnmb33wmvtlOpORkMUp6w+p+zHHkqrfKWuDB+Y/i1HXnZLNx837U5Fxboiy4h5+RfGWUpUvIUaoGmhFf5Pq4XAguxour/QOI1jEdDWnqTrdbLsxuRK+k2oqbuqJ/lCypXnPGw/Ao8jBHRiuLxMM9Sdwks5kO6mi+axUFi/riDOres7F3SvQz4OqNJLVROUWK9yTFbGaDVsEVSKajR2Hc8tNpdkfsXrIYCamDTh3CjNtlxQkS5VIaD9k6lcXeWttIIetvh35bnRPSgFKpFqWvO3mhDNHu4/vX4VlvfjiPlwpUI0YUHBgi9pDv9M+8/GJXmxhxgB",
+          "thinking": "Actually, the duplicates seem to stem from the March 2026 reload, not June as I assumed \u2014 let me double-check the June data to confirm.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01HRwmYaWxyYCcjVqRoStbgA",
+          "input": {
+            "sql": "WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n, count(*) FILTER (WHERE load_batch LIKE 'reload%') r FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, count(*) AS dup_groups, sum(n-1) AS extra_rows, sum(r) AS reload_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01HRwmYaWxyYCcjVqRoStbgA",
+          "content": "{\"columns\": [\"month\", \"dup_groups\", \"extra_rows\", \"reload_rows\", \"extra_amount\"], \"rows\": [[\"2026-03-01T00:00:00\", 159, 159, 159, 892998.75]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01DnSqZVkKVarH1UpEinmxb6",
+          "input": {
+            "sql": "SELECT count(*) AS june_payments_in_nonnightly_batches FROM claim_payments WHERE payment_date BETWEEN '2026-06-01' AND '2026-06-30' AND load_batch NOT LIKE 'nightly-%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DnSqZVkKVarH1UpEinmxb6",
+          "content": "{\"columns\": [\"june_payments_in_nonnightly_batches\"], \"rows\": [[0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"You asked why some claim payments were loaded twice in June 2026. I checked claim_payments for exact duplicates (same claim, date, amount and payee), by payment month and by load batch.\",\"answer\":\"The premise is wrong: no payments were loaded twice in June 2026. All 159 duplicated payment rows have payment dates between 2026-03-02 and 2026-03-13. Each one was loaded a second time by a non-nightly batch called 'reload-2026-03-14'. That adds about $893K of double-counted payments to March 2026. June has no duplicates and no rows from non-nightly batches. The data doesn't show why the reload happened. It looks like a manual re-run of the March 2\u201313 payments that overlapped rows already loaded nightly. Someone in data engineering would need to confirm that.\",\"answer_sql\":\"WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, sum(n-1) AS extra_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"All 159 duplicate payment rows are in March 2026 and come from the reload-2026-03-14 batch. None are in June 2026.\",\"evidence_sql\":\"WITH d AS (SELECT claim_id, payment_date, amount, payee_type, count(*) n, count(*) FILTER (WHERE load_batch LIKE 'reload%') r FROM claim_payments GROUP BY ALL HAVING count(*)>1) SELECT date_trunc('month', payment_date) AS month, count(*) AS dup_groups, sum(n-1) AS extra_rows, sum(r) AS reload_rows, sum(amount*(n-1)) AS extra_amount FROM d GROUP BY 1 ORDER BY 1\",\"key_numbers\":[{\"label\":\"Duplicate rows (all March 2026)\",\"value\":159,\"unit\":\"rows\"},{\"label\":\"Double-counted amount\",\"value\":892998.75,\"unit\":\"USD\"},{\"label\":\"June 2026 payments in non-nightly batches\",\"value\":0,\"unit\":\"rows\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"Payments were double-loaded in June 2026\",\"verdict\":\"ruled_out\",\"evidence\":\"There are no duplicates and no non-nightly batch rows for June payment dates.\"},{\"hypothesis\":\"A manual reload on 2026-03-14 re-delivered March 2\u201313 payments that were already loaded\",\"verdict\":\"supported\",\"evidence\":\"All 159 duplicates sit in the reload-2026-03-14 batch and cover payment dates 2026-03-02 to 2026-03-13. The reason for the reload isn't recorded in the data.\"}],\"data_quality_issues\":[{\"issue\":\"159 payment rows duplicated by the reload-2026-03-14 batch, worth about $893K\",\"impact\":\"Paid amount and incurred losses for March 2026 are overstated unless the duplicates are excluded. Claims with those payments are affected.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove or flag 159 duplicate payments from reload-2026-03-14\",\"reason\":\"They overstate March 2026 paid amounts by about $893K. Data engineering should also confirm why the reload ran.\"}],\"open_questions\":[\"Did you see a June anomaly in a particular report? If so, tell me which one, and I'll check it. It may come from something other than duplicate loads.\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,342 @@
+{
+  "case_id": "what-shop-average-claim-cost-dallas-fort-worth-2026-h1",
+  "repeat": 1,
+  "question": "What was the average claim cost at each Dallas-Fort Worth repair shop in the first half of 2026?",
+  "role": "fraud_team_lead",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost (severity) = incurred (paid + reserve) divided by the number of claims. I counted claims by loss date from 2026-01-01 to 2026-06-30. The claims are auto claims handled by repair shops in the Dallas-Fort Worth metro. Claims with no payments count as zero paid. I left out the 'reload-2026-03-14' payment rows because they duplicate earlier payments. H1 2026 is well before the extract date, so late reporting should have little effect, though bodily injury claims are reported later and could still be missing.",
+    "answer": "Two Dallas-Fort Worth shops handled claims in H1 2026. Bryant Auto Repair (RS-001, preferred) averaged $4,040 per claim over 64 claims. Fletcher Collision Center (RS-004, non-preferred) averaged $4,223 per claim over 32 claims. The non-preferred shop is about 4.5% higher, but the sample is small.",
+    "answer_sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1) SELECT s.repair_shop_id, s.name, s.network_status, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred FROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id) WHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30' GROUP BY ALL ORDER BY s.repair_shop_id",
+    "findings": [
+      {
+        "claim": "Average incurred per claim at the two DFW shops in H1 2026 (by loss date).",
+        "evidence_sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1) SELECT s.repair_shop_id, s.name, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred FROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id) WHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30' GROUP BY ALL",
+        "key_numbers": [
+          {
+            "label": "Bryant Auto Repair avg incurred",
+            "value": 4040.34,
+            "unit": "USD"
+          },
+          {
+            "label": "Bryant claims",
+            "value": 64,
+            "unit": "claims"
+          },
+          {
+            "label": "Fletcher Collision Center avg incurred",
+            "value": 4223.46,
+            "unit": "USD"
+          },
+          {
+            "label": "Fletcher claims",
+            "value": 32,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows were loaded twice in the out-of-batch load 'reload-2026-03-14' (payments dated 2026-03-02 to 2026-03-13).",
+        "impact": "I excluded that batch. 7 of those rows belong to claims at DFW shops. Including them would overstate those shops' averages."
+      },
+      {
+        "issue": "Payment amounts include large outliers (up to $237k).",
+        "impact": "Averages can be pulled up by single large claims, especially with only 32 to 64 claims per shop."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Review duplicate reload-2026-03-14 payment load",
+        "reason": "159 payment rows duplicate earlier rows and distort paid totals."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.034889,
+  "seconds": 16.96,
+  "tool_calls": [
+    {
+      "tool": "describe_table",
+      "input": {
+        "table": "repair_shops"
+      },
+      "source": null
+    },
+    {
+      "tool": "describe_table",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1)\nSELECT s.repair_shop_id, s.name, s.network_status, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred\nFROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id)\nWHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30'\nGROUP BY ALL ORDER BY s.repair_shop_id"
+      },
+      "source": "custom_query",
+      "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1)\nSELECT s.repair_shop_id, s.name, s.network_status, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred\nFROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id)\nWHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30'\nGROUP BY ALL ORDER BY s.repair_shop_id",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) FROM claim_payments WHERE load_batch LIKE 'reload-%' AND claim_id IN (SELECT claim_id FROM claims c JOIN repair_shops s USING(repair_shop_id) WHERE s.metro='Dallas-Fort Worth')"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) FROM claim_payments WHERE load_batch LIKE 'reload-%' AND claim_id IN (SELECT claim_id FROM claims c JOIN repair_shops s USING(repair_shop_id) WHERE s.metro='Dallas-Fort Worth')",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-e4a8553871a8",
+      "run_id": "r-5986d7b60ce1",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 152,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 184,
+      "cost_usd": 0.003374,
+      "seconds": 1.9,
+      "request_id": "req_011Cg3shyUYUzWtanv1GAezE"
+    },
+    {
+      "session_id": "s-e4a8553871a8",
+      "run_id": "r-5986d7b60ce1",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 487,
+      "cache_read_input_tokens": 7116,
+      "cache_creation_input_tokens": 1954,
+      "cost_usd": 0.011182,
+      "seconds": 3.9,
+      "request_id": "req_011Cg3si8FtBUT65JfQAJnyx"
+    },
+    {
+      "session_id": "s-e4a8553871a8",
+      "run_id": "r-5986d7b60ce1",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 148,
+      "cache_read_input_tokens": 9070,
+      "cache_creation_input_tokens": 608,
+      "cost_usd": 0.004818,
+      "seconds": 1.81,
+      "request_id": "req_011Cg3siR4BCNLGzx9bjGog3"
+    },
+    {
+      "session_id": "s-e4a8553871a8",
+      "run_id": "r-5986d7b60ce1",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1312,
+      "cache_read_input_tokens": 9678,
+      "cache_creation_input_tokens": 182,
+      "cost_usd": 0.015515,
+      "seconds": 8.87,
+      "request_id": "req_011Cg3siYvTCUhqK9yNwY9AW"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Review duplicate reload-2026-03-14 payment load",
+      "reason": "159 payment rows duplicate earlier rows and distort paid totals."
+    }
+  ],
+  "session_id": "s-e4a8553871a8",
+  "run_id": "r-5986d7b60ce1",
+  "numbers": {
+    "checked": 4,
+    "confirmed": 4,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Fraud team lead. Sees all data, including personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost at each Dallas-Fort Worth repair shop in the first half of 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01G8aCVFJGsnw3jusX8AJ9yi",
+          "input": {
+            "table": "repair_shops"
+          },
+          "name": "describe_table",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01AG7yiLbxup9ApVupZjKHp2",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "describe_table",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Bf64toEeKW83tXwBipxPt7",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01G8aCVFJGsnw3jusX8AJ9yi",
+          "content": "{\"table\": \"repair_shops\", \"description\": \"Auto repair shops that work on claims. One row per shop.\", \"rows\": 48, \"columns\": [{\"name\": \"repair_shop_id\", \"type\": \"VARCHAR\", \"description\": \"Unique ID of the shop.\", \"empty\": 0, \"distinct\": 48, \"examples\": [\"RS-001\", \"RS-002\", \"RS-003\", \"RS-004\", \"RS-005\"]}, {\"name\": \"name\", \"type\": \"VARCHAR\", \"description\": \"Shop name.\", \"empty\": 0, \"distinct\": 48, \"examples\": [\"Alvarado Auto Body\", \"Blevins Auto Repair\", \"Bowen Body Works\", \"Bryant Auto Repair\", \"Calderon Auto Body\"]}, {\"name\": \"state\", \"type\": \"VARCHAR\", \"description\": \"Two-letter state code.\", \"empty\": 0, \"distinct\": 8, \"examples\": [\"CA\", \"FL\", \"GA\", \"IL\", \"NC\"]}, {\"name\": \"metro\", \"type\": \"VARCHAR\", \"description\": \"Metro area the shop serves.\", \"empty\": 0, \"distinct\": 21, \"examples\": [\"Atlanta\", \"Charlotte\", \"Chicago\", \"Raleigh-Durham\", \"Savannah\"]}, {\"name\": \"network_status\", \"type\": \"VARCHAR\", \"description\": \"Preferred shops are in the insurer's repair network and have agreed rates. Non-preferred shops don't.\", \"empty\": 0, \"values\": [\"preferred\", \"non-preferred\"]}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01AG7yiLbxup9ApVupZjKHp2",
+          "content": "{\"table\": \"claim_payments\", \"description\": \"Payments made on claims. One row per payment row loaded into the warehouse.\", \"rows\": 9349, \"columns\": [{\"name\": \"payment_id\", \"type\": \"VARCHAR\", \"description\": \"Unique ID of the payment row, assigned when the row is loaded.\", \"empty\": 0, \"distinct\": 9349, \"examples\": [\"PAY-0000001\", \"PAY-0000002\", \"PAY-0000003\", \"PAY-0000004\", \"PAY-0000005\"]}, {\"name\": \"claim_id\", \"type\": \"VARCHAR\", \"description\": \"Claim the payment belongs to (claims.claim_id).\", \"empty\": 0, \"distinct\": 6131, \"examples\": [\"CLM-004154\", \"CLM-004208\", \"CLM-004227\", \"CLM-004105\", \"CLM-004214\"]}, {\"name\": \"payment_date\", \"type\": \"DATE\", \"description\": \"Date the payment was issued.\", \"empty\": 0, \"min\": \"2025-01-05\", \"max\": \"2026-09-30\"}, {\"name\": \"amount\", \"type\": \"DECIMAL(12,2)\", \"description\": \"Payment amount in USD.\", \"empty\": 0, \"min\": 0.56, \"max\": 237118.89}, {\"name\": \"payee_type\", \"type\": \"VARCHAR\", \"description\": \"Who received the payment.\", \"empty\": 0, \"values\": [\"repair_shop\", \"policyholder\", \"contractor\", \"claimant\"]}, {\"name\": \"load_batch\", \"type\": \"VARCHAR\", \"description\": \"Name of the warehouse load that delivered the row. Payments normally arrive in the nightly batch after the payment date, named nightly-YYYY-MM-DD.\", \"empty\": 0, \"distinct\": 635, \"examples\": [\"reload-2026-03-14\", \"nightly-2026-08-03\", \"nightly-2026-08-05\", \"nightly-2026-09-06\", \"nightly-2026-07-04\"]}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Bf64toEeKW83tXwBipxPt7",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSiggKEAgSGAI4AUIIdGhpbmtpbmcSDEsFDBFPBUpZU2S0OxoMl3Wdt/9CrgmwnOSyIjBMzC4QJiiXz2DzQP0iIoqfZPvFOAOGgBSFo5ZaIurazgiwpzXZ26Cg3XSjjo1InuQqpwdjrSi6Fx2UVw7PhhuVi12FYlx3C+TWbt2XgSfO6ISy4flmZFQsC661lLzvF5zg3lTmFX7bXTPhqVItg7Ag6BjyfnNz5tR5bexT1AX5pto7d5/+B/mU1+GT1IN8VGAYiHmmDvlUmVG3TqYF3VFPrfXY8T+76KAoFeLP1Z6rFTfIBnJjNLhQGOj9fg0k5PtxqIh4AXJJD755eYQtBpHcMamzPROP8PdCxJJ+E0I5vDqW8XiQzItgCGgPMjeZz7Nb/Nvh/xnHObFWgcRRUklsYXUvqm3Nsiu4txVuGjhgaCzHD76QDXUsgnYEnalzFz6QuPjyDzCOPOLHnmCD74Qx490GJpeWMouNRX/r1GCFJEj6z0hmvPi2GAEb1xscrasu6ad9TxmOyoCvDHWbnofsp+Fo/6DZJeg1yfaS/Vc6BaGwvbpCMOcxvfy6pWrhrIzvS25ISICEf4+ox7rfGFtyw07xDFRBevCOppb9DuTef5rKpEU2eqXoFQ89sFl0JyFRce4QCsmjNv6q57h+qRfrrGVxJzEJotNKInnb3U0K+KFs/vMFqQyG55koC2G6WLY6j1D/RESJ9yuVSVOplfjQdQYvDPJse+RN5z0VLyzzcKy/+GhmYuGc0/0LecsHCADx4Xmz/rS/kL8rtHTLfIUeR8xzr+ktusroawLz/IIdV1L9VT5IDPMg+gzAS6fPXcGvK9zZ9ofZ2e01uJliqK6Nrka7mWEBpO/8Sglat7nH1zTj6f5zABegpZkoyI8DIRcq4hHa2SX6h+Dfo2IXdX3dwt3ZK0E4aAhKjyEJg56mbcFSpsFJFVroPTjdgqliR80nq1yN7y9EeDlkDX0MTlvBLxOfgP5MbFJsDBMsY1KgVIeQNJxZcnyh3HQSSAvn9F/+m2WxYBxz59XPd2v54gCm5USW2d18PHUoojxRymGCSfj5vYVKEP4oHulqhop3vXOGcSa6/Y9Bk8qmHMA/r5BpXQFxFGLmEgtGubtlDC+bpYvI9i3NibO2N/pNCI1CobZ0ublqUAlGEMHrVdzBZ8lpN+mXQg7HQnWGZRmr7H9LnGfcgSCbKhXgOHkx2xkmV6U76c8CrSRqN+D0o0/XxVPPdzuFUPZCpH9mZMS47qF3bUNrt5hhrUIKWvKFl4BD89kwC9IPI7ODldgy3yMvcQ4lUlE20LNNxpCa2WSdIJb867R6VNKLr/Wk0ec6Ec7Zii8sqi1widouzKjWB2AAL3NO/vfk/6Nzucr4TBgB",
+          "thinking": "I need to exclude the reload batch rows since they're duplicates, rather than trying to dedupe by matching fields which could wrongly exclude genuine duplicates. Then I'll filter claims by loss date in H1 2026 for Dallas-Fort Worth shops, computing incurred as paid plus reserves.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_019sdG2LioQi3FwZQezbxeNd",
+          "input": {
+            "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1)\nSELECT s.repair_shop_id, s.name, s.network_status, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred\nFROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id)\nWHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30'\nGROUP BY ALL ORDER BY s.repair_shop_id"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019sdG2LioQi3FwZQezbxeNd",
+          "content": "{\"columns\": [\"repair_shop_id\", \"name\", \"network_status\", \"claims\", \"avg_incurred\"], \"rows\": [[\"RS-001\", \"Bryant Auto Repair\", \"preferred\", 64, 4040.34], [\"RS-004\", \"Fletcher Collision Center\", \"non-preferred\", 32, 4223.46]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01NZt5wvuQvsGneXeH29hwFM",
+          "input": {
+            "sql": "SELECT count(*) FROM claim_payments WHERE load_batch LIKE 'reload-%' AND claim_id IN (SELECT claim_id FROM claims c JOIN repair_shops s USING(repair_shop_id) WHERE s.metro='Dallas-Fort Worth')"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01NZt5wvuQvsGneXeH29hwFM",
+          "content": "{\"columns\": [\"count_star()\"], \"rows\": [[7]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost (severity) = incurred (paid + reserve) divided by the number of claims. I counted claims by loss date from 2026-01-01 to 2026-06-30. The claims are auto claims handled by repair shops in the Dallas-Fort Worth metro. Claims with no payments count as zero paid. I left out the 'reload-2026-03-14' payment rows because they duplicate earlier payments. H1 2026 is well before the extract date, so late reporting should have little effect, though bodily injury claims are reported later and could still be missing.\",\"answer\":\"Two Dallas-Fort Worth shops handled claims in H1 2026. Bryant Auto Repair (RS-001, preferred) averaged $4,040 per claim over 64 claims. Fletcher Collision Center (RS-004, non-preferred) averaged $4,223 per claim over 32 claims. The non-preferred shop is about 4.5% higher, but the sample is small.\",\"answer_sql\":\"WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1) SELECT s.repair_shop_id, s.name, s.network_status, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred FROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id) WHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30' GROUP BY ALL ORDER BY s.repair_shop_id\",\"findings\":[{\"claim\":\"Average incurred per claim at the two DFW shops in H1 2026 (by loss date).\",\"evidence_sql\":\"WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1) SELECT s.repair_shop_id, s.name, count(*) AS claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) AS avg_incurred FROM claims c JOIN repair_shops s USING(repair_shop_id) LEFT JOIN p USING(claim_id) WHERE s.metro='Dallas-Fort Worth' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-06-30' GROUP BY ALL\",\"key_numbers\":[{\"label\":\"Bryant Auto Repair avg incurred\",\"value\":4040.34,\"unit\":\"USD\"},{\"label\":\"Bryant claims\",\"value\":64,\"unit\":\"claims\"},{\"label\":\"Fletcher Collision Center avg incurred\",\"value\":4223.46,\"unit\":\"USD\"},{\"label\":\"Fletcher claims\",\"value\":32,\"unit\":\"claims\"}],\"confidence\":\"medium\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows were loaded twice in the out-of-batch load 'reload-2026-03-14' (payments dated 2026-03-02 to 2026-03-13).\",\"impact\":\"I excluded that batch. 7 of those rows belong to claims at DFW shops. Including them would overstate those shops' averages.\"},{\"issue\":\"Payment amounts include large outliers (up to $237k).\",\"impact\":\"Averages can be pulled up by single large claims, especially with only 32 to 64 claims per shop.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Review duplicate reload-2026-03-14 payment load\",\"reason\":\"159 payment rows duplicate earlier rows and distort paid totals.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

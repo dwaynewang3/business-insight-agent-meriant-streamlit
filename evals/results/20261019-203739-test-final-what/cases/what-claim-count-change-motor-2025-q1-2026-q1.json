@@ -1,0 +1,362 @@
+{
+  "case_id": "what-claim-count-change-motor-2025-q1-2026-q1",
+  "repeat": 1,
+  "warehouse": "data/test.duckdb",
+  "question": "By what percentage did the number of motor claims change from Q1 2025 to Q1 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Motor claim count by loss date (the agreed claim_count definition). It compares Q1 2025 (1 Jan to 31 Mar 2025) with Q1 2026 (1 Jan to 31 Mar 2026). I did not adjust for changes in the number of policies in force.",
+    "answer": "Motor claims rose by 4.5%, from 662 in Q1 2025 to 692 in Q1 2026, which is 30 more claims. Both quarters ended more than 5 months before the extract date. Late reporting should have little effect on them, though some third-party claims may still be reported late.",
+    "answer_sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'",
+    "findings": [
+      {
+        "claim": "Motor claim count increased 4.53% from Q1 2025 to Q1 2026.",
+        "evidence_sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'",
+        "key_numbers": [
+          {
+            "label": "Q1 2025 motor claims",
+            "value": 662,
+            "unit": "claims"
+          },
+          {
+            "label": "Q1 2026 motor claims",
+            "value": 692,
+            "unit": "claims"
+          },
+          {
+            "label": "Change",
+            "value": 4.53,
+            "unit": "percent"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.040685,
+  "seconds": 19.25,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_count"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_count",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "motor"
+            ]
+          }
+        ],
+        "grain": "quarter",
+        "start": "2025-01-01",
+        "end": "2026-03-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('quarter', loss_date) AS DATE) AS period, count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-01-01'\n  AND loss_date <= DATE '2026-03-31'\n  AND product IN ('motor')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 5,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-9f0f2a75cb08",
+      "run_id": "r-2b11f33b905c",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 95,
+      "cache_read_input_tokens": 15298,
+      "cache_creation_input_tokens": 180,
+      "cost_usd": 0.004468,
+      "seconds": 4.41,
+      "request_id": "req_011CgBNyUGDyChSitD7QdVaK",
+      "batch": false
+    },
+    {
+      "session_id": "s-9f0f2a75cb08",
+      "run_id": "r-2b11f33b905c",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 193,
+      "cache_read_input_tokens": 15478,
+      "cache_creation_input_tokens": 267,
+      "cost_usd": 0.005697,
+      "seconds": 2.29,
+      "request_id": "req_011CgBNynve8TeePPvhxshiK",
+      "batch": false
+    },
+    {
+      "session_id": "s-9f0f2a75cb08",
+      "run_id": "r-2b11f33b905c",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 371,
+      "cache_read_input_tokens": 15745,
+      "cache_creation_input_tokens": 665,
+      "cost_usd": 0.008526,
+      "seconds": 2.98,
+      "request_id": "req_011CgBNyxqwim82sLS54BYmh",
+      "batch": false
+    },
+    {
+      "session_id": "s-9f0f2a75cb08",
+      "run_id": "r-2b11f33b905c",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 336,
+      "cache_read_input_tokens": 16410,
+      "cache_creation_input_tokens": 427,
+      "cost_usd": 0.007713,
+      "seconds": 2.67,
+      "request_id": "req_011CgBNzBi64V6HDL6ioNVhf",
+      "batch": false
+    },
+    {
+      "session_id": "s-9f0f2a75cb08",
+      "run_id": "r-2b11f33b905c",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 993,
+      "cache_read_input_tokens": 16837,
+      "cache_creation_input_tokens": 392,
+      "cost_usd": 0.014281,
+      "seconds": 6.45,
+      "request_id": "req_011CgBNzPHchfvjA7Lns49eY",
+      "batch": false
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-9f0f2a75cb08",
+  "run_id": "r-2b11f33b905c",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "citations": {
+    "cited": 0,
+    "confirmed": 0,
+    "without_version": 0,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+43e10c675c",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "By what percentage did the number of motor claims change from Q1 2025 to Q1 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSyQUKEAgSGAI4AUIIdGhpbmtpbmcSDN78YE6Q3EbYIjIQsBoMGgCOrVvxY7QvCKvaIjAgmo5k5A/OBf/CtSNEWSnDf6B3kiHsMMLPEDgl8MmDqylesV3f/hn7sdTTBJLMzscq5gQVaa5tHFXaMB1xB7R37crCiy0tDHNUeL25C0o0eDcfS6N42yfZ2Kx4S+LFT5fONtNENxOfFumklCHZJ0QEBxPUaHPqqa0HV0dCFHK7fE9Y9Hn1A6JOmu0KIX10qqqaWEKfkhqMaivWKokDxqBPj7xZRKnR6wi8D96oJbeKPZzm/iOVMAk9M892FdG4J4Iq/XeFYyh78gacVrbtdzPBbDRgXUkbX2P+r8r3kJARVnHJ8BBrvbZuH5Tg3s2IGdqI06nF6jhrwxmmX89fNPgiksiiC1L42Q6l4t4lh5tej8LoTJahFOwZQwj/QdxpehW9/wLxmFCPHNuyytykkSHEyMzA3hlt933NKEMzCwe/pyHwPigzrOu5eLHUBxhFPoXAZxdtNzbmb4zwcoNsXgyTLvYCnpzyI9emZQFkt3PkrcFnP671J/tjyB+QjQjAEkHiaglCEhdnK31P9WtEEbAUVWES6dkCSv29e52uyJ3Am5MEE1m4lvZ1zhUS+0zXAF7Z3zcBLhZOuwXNFFWdrXIfDHsIkC/wJwT0Yb+/UjkawuOh6iphQv6DkRrK1yOnaLr8gRPNpyq2Zm2jRh7cLn7nLaHgn5p6HreNjwB/KyN2LL+h7N5nt7n72tIMvNCmLd8cQxQPL2fygiRCsYZSy69KduWccSXpNCppcH7a++z2sREFYPhqB+sT7b9a8jv2jzukY6BwhxwDkCh+Uw26nA3AfBUU5KADwdJAccpM69sm51D5LdpgJrMcyWSieY3dIvR+98+7QoLiaP03T01WPZKFWjkb99TWG8FJKt540ffZ21yOQOPG7/V5HxgB",
+          "thinking": "I need to figure out whether claims should be counted by loss date or report date, so I'm checking the glossary's definition of the claim_count metric.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Tb4jcbnRvLXcx3Nf7M1LMv",
+          "input": {
+            "name": "claim_count"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Tb4jcbnRvLXcx3Nf7M1LMv",
+          "content": "{\"name\": \"claim_count\", \"label\": \"Claim count\", \"description\": \"Number of claims, counted by loss date.\", \"unit\": \"claims\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"count(*) over claim_facts\", \"time_column\": \"loss_date\", \"notes\": \"Claims are often reported days or weeks after the loss, so the most recent weeks keep filling in as late reports arrive.\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01C8cW6sYSD5hVZcGygU8exM",
+          "input": {
+            "metric": "claim_count",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "motor"
+                ]
+              }
+            ],
+            "grain": "quarter",
+            "start": "2025-01-01",
+            "end": "2026-03-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01C8cW6sYSD5hVZcGygU8exM",
+          "content": "{\"metric\": \"claim_count\", \"label\": \"Claim count\", \"unit\": \"claims\", \"definition\": \"count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('quarter', loss_date) AS DATE) AS period, count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-01-01'\\n  AND loss_date <= DATE '2026-03-31'\\n  AND product IN ('motor')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 662], [\"2025-04-01\", 696], [\"2025-07-01\", 652], [\"2025-10-01\", 700], [\"2026-01-01\", 692]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS3wUKEAgSGAI4AUIIdGhpbmtpbmcSDOKG2LDwwChG0jYLtBoM3dARhA8vb6eq0R/OIjDSR4wiVeg5J4g/Cm2kqlxVOEGKdT7UCqB50ueWKcfeR2giPemQIdxysyiSdwclb0Yq/AQiUM5bE9aAGcwTGKvSNhSI+REfvap6zzN4FdfsNFYeUzGz+P7eN2tOlVSfo39aTT5H+puTO1MRcQj4bRYxuwseIqpJ10fcdrfsH4/UP1Apc3xKEQY+Sd/HXgnY5AjGsB2U1H8u7LXxhXzzFQqL9PMeQW1XJji7IAsjOR+jc+MZ+OKoPKSsGixYP5KD9n9DkQBxH8fB2vBTHUSU62CBPzEiYhXQiQ3FoQUWw8+KyYjxkyid87VvCbAJk6uRD27N9vjn6riVWf+JmmM0YsQyhB+sSyd/8r4K1rAWYHxJflFtVKqNO6z1E5pzenh59Xp+lbA1TACpg+9hAVOcZFqU5KQtcfPgd8fv8ms9MipZSj1icxNxDTSciGVNg9Cbuqql+bd5v9EBsCQjrBzQI2MpIWe9OOy/ZN1WhJi2lPEwD06uj+dOJJ5NWrxerHhNDQkY3FCoFnpL5+EJTfXuYPv2P/0cBx1XOWq0cVCmdMbZI1TXC6793sVsdvqtt3YeUMLm/auR/xWVaR6/efR1SVwjbw6bmgPYrsGg4BlZHzJzqHGAjcBpyMnWEPfmWg4X+wyq9yv02ohDbT2qF/MaYHtKFnBoad/vieSUNcF3WWovlKo7ec+7yBg1VZZPtlmJ2fjY5uqSjFfmHdgbmxG8M52yRta8guLIsmG7zzCAsk8rmB/+vbbGoqeBgOjmetxt2/3LpOU4q29svrzMpfL0vDwdUe3VLBAek4tJzfMoDNZLToJTWEyvAN9+OgD/uxsmxTWIppjfu6ApJWuo3eBA+CNzM9rQkuR1JMnKSSbVnONs4MLH1fPc+3fzKBCP0zOhci/JTGx3LPHcu7hobyB7IKgYAQ==",
+          "thinking": "That's about a 4.53% increase, so I'll write a SQL query to compute this percentage change for the answer.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01VNHua4gtDDjrh5kZmUoauK",
+          "input": {
+            "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VNHua4gtDDjrh5kZmUoauK",
+          "content": "{\"columns\": [\"q1_2025\", \"q1_2026\", \"pct_change\"], \"rows\": [[662, 692, 4.53]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VUoWR4KEkoWfQdB2rjUtk6",
+          "input": {
+            "sql": "SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VUoWR4KEkoWfQdB2rjUtk6",
+          "content": "{\"columns\": [\"q1_2025\", \"q1_2026\", \"pct_change\"], \"rows\": [[662, 692, 4.53]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Motor claim count by loss date (the agreed claim_count definition). It compares Q1 2025 (1 Jan to 31 Mar 2025) with Q1 2026 (1 Jan to 31 Mar 2026). I did not adjust for changes in the number of policies in force.\",\"answer\":\"Motor claims rose by 4.5%, from 662 in Q1 2025 to 692 in Q1 2026, which is 30 more claims. Both quarters ended more than 5 months before the extract date. Late reporting should have little effect on them, though some third-party claims may still be reported late.\",\"answer_sql\":\"SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'\",\"findings\":[{\"claim\":\"Motor claim count increased 4.53% from Q1 2025 to Q1 2026.\",\"evidence_sql\":\"SELECT count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31') AS q1_2025, count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') AS q1_2026, round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31') - count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'))/count(*) FILTER (WHERE loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-03-31'),2) AS pct_change FROM claims WHERE product='motor'\",\"key_numbers\":[{\"label\":\"Q1 2025 motor claims\",\"value\":662,\"unit\":\"claims\"},{\"label\":\"Q1 2026 motor claims\",\"value\":692,\"unit\":\"claims\"},{\"label\":\"Change\",\"value\":4.53,\"unit\":\"percent\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

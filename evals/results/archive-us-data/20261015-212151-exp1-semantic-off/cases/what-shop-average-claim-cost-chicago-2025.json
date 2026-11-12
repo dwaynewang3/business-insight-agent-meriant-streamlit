@@ -1,0 +1,369 @@
+{
+  "case_id": "what-shop-average-claim-cost-chicago-2025",
+  "repeat": 1,
+  "question": "What was the average claim cost at each Chicago repair shop in 2025?",
+  "role": "fraud_team_lead",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost (severity) is average incurred, meaning paid plus reserve, per claim. It covers claims with a loss date in 2025 that were handled by the three repair shops in Chicago. Only auto collision, glass and hail claims have a repair shop. Payments from the 'reload-2026-03-14' batch are excluded because they exactly duplicate payments already loaded in the nightly batches.",
+    "answer": "Average incurred cost per claim in 2025 at the three Chicago shops: Valdez Auto Body (preferred) $2,475 over 48 claims, Reid Collision Center (preferred) $3,525 over 47 claims, and Campbell Body Works (non-preferred) $4,301 over 29 claims. The non-preferred shop's average is the highest, about 74% above Valdez. These are small samples. Some 2025 claims may still develop through reserves.",
+    "answer_sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred from claims c join repair_shops s using(repair_shop_id) left join p using(claim_id) where s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31' group by all order by 1",
+    "findings": [
+      {
+        "claim": "Average incurred per claim in 2025 at each Chicago shop. The non-preferred shop is the most expensive.",
+        "evidence_sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred from claims c join repair_shops s using(repair_shop_id) left join p using(claim_id) where s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31' group by all order by 1",
+        "key_numbers": [
+          {
+            "label": "Valdez Auto Body RS-037",
+            "value": 2475.26,
+            "unit": "USD"
+          },
+          {
+            "label": "Reid Collision Center RS-039",
+            "value": 3524.78,
+            "unit": "USD"
+          },
+          {
+            "label": "Campbell Body Works RS-041",
+            "value": 4301.36,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows from the batch reload-2026-03-14 duplicate rows already loaded in the nightly batches.",
+        "impact": "I excluded them. Including them would overstate paid amounts for the affected claims."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate reload-2026-03-14 rows from claim_payments",
+        "reason": "159 rows exactly duplicate nightly-loaded payments and inflate paid totals."
+      }
+    ],
+    "open_questions": [
+      "Should claims without any payment, such as those closed without payment, stay in the average? They are included here, at their reserve or $0."
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.031637,
+  "seconds": 21.33,
+  "tool_calls": [
+    {
+      "tool": "describe_table",
+      "input": {
+        "table": "repair_shops"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select metro, count(*) from repair_shops group by 1"
+      },
+      "source": "custom_query",
+      "sql": "select metro, count(*) from repair_shops group by 1",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1)\nselect s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred\nfrom claims c join repair_shops s using(repair_shop_id) left join p using(claim_id)\nwhere s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31'\ngroup by all order by 1"
+      },
+      "source": "custom_query",
+      "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1)\nselect s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred\nfrom claims c join repair_shops s using(repair_shop_id) left join p using(claim_id)\nwhere s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31'\ngroup by all order by 1",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select count(*) from claim_payments r where load_batch like 'reload%' and exists (select 1 from claim_payments n where n.claim_id=r.claim_id and n.payment_date=r.payment_date and n.amount=r.amount and n.load_batch like 'nightly-%')"
+      },
+      "source": "custom_query",
+      "sql": "select count(*) from claim_payments r where load_batch like 'reload%' and exists (select 1 from claim_payments n where n.claim_id=r.claim_id and n.payment_date=r.payment_date and n.amount=r.amount and n.load_batch like 'nightly-%')",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-f7a74ce35784",
+      "run_id": "r-6c275592d32d",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 115,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 173,
+      "cost_usd": 0.002977,
+      "seconds": 2.59,
+      "request_id": "req_011Cg3ser3EKssmh5y8iw11o"
+    },
+    {
+      "session_id": "s-f7a74ce35784",
+      "run_id": "r-6c275592d32d",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 105,
+      "cache_read_input_tokens": 7105,
+      "cache_creation_input_tokens": 950,
+      "cost_usd": 0.00485,
+      "seconds": 4.44,
+      "request_id": "req_011Cg3sf3M7kfQ4Hj7jgcDxM"
+    },
+    {
+      "session_id": "s-f7a74ce35784",
+      "run_id": "r-6c275592d32d",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 303,
+      "cache_read_input_tokens": 8055,
+      "cache_creation_input_tokens": 685,
+      "cost_usd": 0.006358,
+      "seconds": 3.73,
+      "request_id": "req_011Cg3sfNZ2g79K5yBBsoPWT"
+    },
+    {
+      "session_id": "s-f7a74ce35784",
+      "run_id": "r-6c275592d32d",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 141,
+      "cache_read_input_tokens": 8740,
+      "cache_creation_input_tokens": 452,
+      "cost_usd": 0.004292,
+      "seconds": 2.59,
+      "request_id": "req_011Cg3sfeagtgUzK6T2yxr2w"
+    },
+    {
+      "session_id": "s-f7a74ce35784",
+      "run_id": "r-6c275592d32d",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1088,
+      "cache_read_input_tokens": 9192,
+      "cache_creation_input_tokens": 175,
+      "cost_usd": 0.01316,
+      "seconds": 7.54,
+      "request_id": "req_011Cg3sfqjuAZExu3GoDCvYK"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate reload-2026-03-14 rows from claim_payments",
+      "reason": "159 rows exactly duplicate nightly-loaded payments and inflate paid totals."
+    }
+  ],
+  "session_id": "s-f7a74ce35784",
+  "run_id": "r-6c275592d32d",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Fraud team lead. Sees all data, including personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost at each Chicago repair shop in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Bw6qey7effHbNjBxLB47PM",
+          "input": {
+            "table": "repair_shops"
+          },
+          "name": "describe_table",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01DhcU9bFfydcubYxP3DNno7",
+          "input": {
+            "sql": "select metro, count(*) from repair_shops group by 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Bw6qey7effHbNjBxLB47PM",
+          "content": "{\"table\": \"repair_shops\", \"description\": \"Auto repair shops that work on claims. One row per shop.\", \"rows\": 48, \"columns\": [{\"name\": \"repair_shop_id\", \"type\": \"VARCHAR\", \"description\": \"Unique ID of the shop.\", \"empty\": 0, \"distinct\": 48, \"examples\": [\"RS-001\", \"RS-002\", \"RS-003\", \"RS-004\", \"RS-005\"]}, {\"name\": \"name\", \"type\": \"VARCHAR\", \"description\": \"Shop name.\", \"empty\": 0, \"distinct\": 48, \"examples\": [\"Alvarado Auto Body\", \"Blevins Auto Repair\", \"Bowen Body Works\", \"Bryant Auto Repair\", \"Calderon Auto Body\"]}, {\"name\": \"state\", \"type\": \"VARCHAR\", \"description\": \"Two-letter state code.\", \"empty\": 0, \"distinct\": 8, \"examples\": [\"CA\", \"FL\", \"GA\", \"IL\", \"NC\"]}, {\"name\": \"metro\", \"type\": \"VARCHAR\", \"description\": \"Metro area the shop serves.\", \"empty\": 0, \"distinct\": 21, \"examples\": [\"Atlanta\", \"Charlotte\", \"Chicago\", \"Raleigh-Durham\", \"Savannah\"]}, {\"name\": \"network_status\", \"type\": \"VARCHAR\", \"description\": \"Preferred shops are in the insurer's repair network and have agreed rates. Non-preferred shops don't.\", \"empty\": 0, \"values\": [\"preferred\", \"non-preferred\"]}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DhcU9bFfydcubYxP3DNno7",
+          "content": "{\"columns\": [\"metro\", \"count_star()\"], \"rows\": [[\"New York City\", 2], [\"Buffalo\", 2], [\"Cleveland\", 2], [\"Cincinnati\", 2], [\"San Diego\", 2], [\"Savannah\", 3], [\"Orlando-Tampa\", 2], [\"Raleigh-Durham\", 3], [\"Dallas-Fort Worth\", 2], [\"San Francisco Bay Area\", 2], [\"Los Angeles\", 2], [\"Chicago\", 3], [\"Springfield\", 3], [\"Charlotte\", 3], [\"Albany\", 2], [\"Austin-San Antonio\", 2], [\"Columbus\", 2], [\"Houston\", 2], [\"Miami\", 2], [\"Jacksonville\", 2], [\"Atlanta\", 3]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS4gUKEAgSGAI4AUIIdGhpbmtpbmcSDGsaS7nA5b0gNi7WThoMCRQeGnCId580nNm8IjCfDdRXagP2uV/p/7elVr7svu5bPQcKCzm3s32pO6fO6ntBW6eDm0J+iHxsdrXuOAUq/wRNar8qkTScIjuY+9yKIswbAxF2skyn5mvdoqXDUknICtru5yq9iLXjjvTUi41I+TcWrVXWYv2uKyMut/UmPyJlCbzVwfgs7s9Y0qIZHLYJaOYfPTe4MlyUDzamTg7HOAc/ri6GLrAXXAueVE+/sPMgaP5VdmbvGOsNcdkGC0BbfgkxQlRDrVfUKNnr821zlYC6XRJ0u/kuWaWpbfFRS45mc8mOBEsgzi1ZrTk7+Y3CMbQWGBNGiIW91E90lSADReYpWPUHrDXQxRnNZd4mOS+HU6dltNzKoQm7WIYaudkIvN4HB2tB5PeFz4yTVnPX7zPDYKbApQG4eB2/aqEJmtTqKTl0lous4ggG5oeAk6pdV+hDwNW21xKrQcMkk5bMXtV9QBkvU8gpEcEtm6bdULM88K5Od45euSLesBVSH8RKArSEGUIA1MxjLDNF3iG0ha1fVBvXxLyO4q9AhpEmcTfcUyGmLfJWs89wTSOvcrwddg8pNLM+ZHYFn0JGWLYE6D5TpAd2mKo6XLyJ2aZa+3JnntThyWD2S4dVxeAMQrnGIAWvb0PU6acuA8y7CjsttROq5yV+sL5lfwRR3zZvARPa5USERLvJZ8oMg6GJbERE3Ui4J1HfVcBZvWAmxCkhAssVRvI2I0g2UzQdfzp++4G/1lOvFhYMN45I3GGYng0raMSY1PdenKaKz/vpwbsozGwHCczv4kTDo1C0jo7dHKrx6vPEIGLQ3XOsNbFchjg09QPl6/EYTW4E0ofxVMGFCoI0CtABwjybfepAWKFTydzUa3fl0SbqoXcpP1qlZnb2vqOd6ehU8kWC1uFaDThNThfE6Ei0Ibud04/xO82Sr2oYAQ==",
+          "thinking": "I should define the scope as claims with a 2025 loss date, with incurred amounts calculated as paid plus reserve, and I need to check the claim_payments data for duplicates or entries falling outside the expected batches.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01NsKup6xT1Ye5KE2AfeeCWy",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01NsKup6xT1Ye5KE2AfeeCWy",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS1QYKEAgSGAI4AUIIdGhpbmtpbmcSDCG0AZj9Bz/e16lPpxoMBE67ghTi8xMt2G2HIjDOchNlgTrGBFxlQl9lJvCThuwVfKbAGNhMaBK9GCU3gjVNiCd3CX8XYYUXK1GSBEcq8gXHnpmy5MAttxJN0Rfbpcx4TwtrHu865pFVGYlb12wJX9hGQR/KhCtV+QrL44PB8eqXR0PJoWAXwbq1We8rUPuS6iMEwF/Nct1Qc9vRhE81VZRYlty05OABvq2FhPf1Z+ogdLI0ki4ZqLZovgTNZcnMWfesLDrtZRMjGDAXohVaQVUrac/2h4XQAfoFecYZjjeWtwQNdxXVLiTCK8QSdWvr/H8u5wftipUgyNJmMlLni/V8JLYrRg8zQLGCk2R/H/YHVn+vYfaAIlcjSjsOH2RgAHmSul8pVLR/Aw6dvpQIqtxUmnyIjSymXNQG/mK7r4C9Fpl4mCafBXxlUXxgJOrZOveA89w7DG1Rmdc4jYmWjWSLkJreSWm7ycBU/2QzB6h7dfJJZOsVsMPNwa3TVi0JK5Elo8qpHZ//Q6UP0uTMW39wdbbl6CcLu987864i7wMs2j+9Aw0kcinfLk4ax3Dyg9djoimm9K7zfd4F7KT9wnBz6Kdb9tlP2Tgw8BOY3LuSBDRweM9baO7XL3lTHszhe5s12iQl/tf+oTNbi/34PMZoVSEM0Hxh+taQ9deLjh/m7gIxq8M5vPQ482GN4UHTxKPsMcntrbybl9Cavhv6ar+TTokR3K4Mg4qbLfuu2hkXBhL7l54yjcVOxwBDyES+m0ZKcRhGQa5JD8WEiTZI2EqbCPO5zBVllr20A9kjYtil0mvc0SSrbTsIsthZjAsD4S0v49/78zFrRzphmuLkUj28Jk89IZCaJiQ6+T4z2X11SUcquylp2WHRN/vapbmH8xEShGKZJ4MHpC9VMGSPUMpI4hYq47KyKDV1j4NWecXhuTdZY3lnZbmFzyBjEcizBiSgQ104kdJeWAEn02BKQTB6gksWxnPL0NeZo9CnXWKWpRiIhqaH9VwL1h/7yFgaCdAO7m7zAa2Z1A/SJ4qxMfHuVX5BBT4SK4NAG9VC3C4rTQnSgivnuO9sldKEtIRdC2NG3nTFWJocruXmThdUKOg5GAE=",
+          "thinking": "The duplicates look like reload rows, so I can exclude load_batch entries matching 'reload%'. I'll assume the 159 count matches and dedupe by filtering out that reload batch.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_013kce45u2p6Ykd8MeD8t9T4",
+          "input": {
+            "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1)\nselect s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred\nfrom claims c join repair_shops s using(repair_shop_id) left join p using(claim_id)\nwhere s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31'\ngroup by all order by 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_013kce45u2p6Ykd8MeD8t9T4",
+          "content": "{\"columns\": [\"repair_shop_id\", \"name\", \"network_status\", \"claims\", \"avg_incurred\"], \"rows\": [[\"RS-037\", \"Valdez Auto Body\", \"preferred\", 48, 2475.26], [\"RS-039\", \"Reid Collision Center\", \"preferred\", 47, 3524.78], [\"RS-041\", \"Campbell Body Works\", \"non-preferred\", 29, 4301.36]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_016cJV2xLYqeHaoYSaX7rae5",
+          "input": {
+            "sql": "select count(*) from claim_payments r where load_batch like 'reload%' and exists (select 1 from claim_payments n where n.claim_id=r.claim_id and n.payment_date=r.payment_date and n.amount=r.amount and n.load_batch like 'nightly-%')"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_016cJV2xLYqeHaoYSaX7rae5",
+          "content": "{\"columns\": [\"count_star()\"], \"rows\": [[159]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost (severity) is average incurred, meaning paid plus reserve, per claim. It covers claims with a loss date in 2025 that were handled by the three repair shops in Chicago. Only auto collision, glass and hail claims have a repair shop. Payments from the 'reload-2026-03-14' batch are excluded because they exactly duplicate payments already loaded in the nightly batches.\",\"answer\":\"Average incurred cost per claim in 2025 at the three Chicago shops: Valdez Auto Body (preferred) $2,475 over 48 claims, Reid Collision Center (preferred) $3,525 over 47 claims, and Campbell Body Works (non-preferred) $4,301 over 29 claims. The non-preferred shop's average is the highest, about 74% above Valdez. These are small samples. Some 2025 claims may still develop through reserves.\",\"answer_sql\":\"with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred from claims c join repair_shops s using(repair_shop_id) left join p using(claim_id) where s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31' group by all order by 1\",\"findings\":[{\"claim\":\"Average incurred per claim in 2025 at each Chicago shop. The non-preferred shop is the most expensive.\",\"evidence_sql\":\"with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select s.repair_shop_id, s.name, s.network_status, count(*) claims, round(avg(coalesce(p.paid,0)+c.reserve_amount),2) avg_incurred from claims c join repair_shops s using(repair_shop_id) left join p using(claim_id) where s.metro='Chicago' and c.loss_date between '2025-01-01' and '2025-12-31' group by all order by 1\",\"key_numbers\":[{\"label\":\"Valdez Auto Body RS-037\",\"value\":2475.26,\"unit\":\"USD\"},{\"label\":\"Reid Collision Center RS-039\",\"value\":3524.78,\"unit\":\"USD\"},{\"label\":\"Campbell Body Works RS-041\",\"value\":4301.36,\"unit\":\"USD\"}],\"confidence\":\"medium\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows from the batch reload-2026-03-14 duplicate rows already loaded in the nightly batches.\",\"impact\":\"I excluded them. Including them would overstate paid amounts for the affected claims.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate reload-2026-03-14 rows from claim_payments\",\"reason\":\"159 rows exactly duplicate nightly-loaded payments and inflate paid totals.\"}],\"open_questions\":[\"Should claims without any payment, such as those closed without payment, stay in the average? They are included here, at their reserve or $0.\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

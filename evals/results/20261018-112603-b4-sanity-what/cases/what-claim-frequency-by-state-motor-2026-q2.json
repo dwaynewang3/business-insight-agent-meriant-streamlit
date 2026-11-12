@@ -1,0 +1,359 @@
+{
+  "case_id": "what-claim-frequency-by-state-motor-2026-q2",
+  "repeat": 1,
+  "question": "What was the motor claim frequency by state in Q2 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Motor claim frequency, defined as 1000 \u00d7 claims \u00f7 policy-months. Claims are counted by loss date from 2026-04-01 to 2026-06-30 (Q2 2026). Results are split by policy state. Exposure is taken from exposure_monthly.",
+    "answer": "In Q2 2026, motor claim frequency per 1,000 policies per month was highest in NSW (7.95) and TAS (7.81). VIC was 7.03 and QLD 6.77. WA was 6.49, SA 6.40 and ACT 5.99. NT was lowest at 4.57. Q2 ended three months before the extract date, so late-reported claims will have little effect. The latest weeks of June may still be slightly understated.",
+    "answer_sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+    "findings": [
+      {
+        "claim": "Motor claim frequency by state, Q2 2026 (claims per 1,000 policy-months)",
+        "evidence_sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+        "key_numbers": [
+          {
+            "label": "NSW",
+            "value": 7.95,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "TAS",
+            "value": 7.81,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "VIC",
+            "value": 7.03,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "QLD",
+            "value": 6.77,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "WA",
+            "value": 6.49,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "SA",
+            "value": 6.4,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "ACT",
+            "value": 5.99,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "NT",
+            "value": 4.57,
+            "unit": "per 1,000 per month"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "Late reporting: claims are reported days or weeks after the loss, so the end of June may be slightly incomplete.",
+        "impact": "Frequencies may be marginally understated, mostly for third-party property claims. I did not run the data-quality check tool."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.06927,
+  "seconds": 25.51,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_frequency",
+        "dimensions": [
+          "state"
+        ],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "motor"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT state, count(*) AS value\n    FROM source\n    WHERE loss_date >= DATE '2026-04-01'\n      AND loss_date <= DATE '2026-06-30'\n      AND product IN ('motor')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT state, sum(policies_in_force) AS value\n    FROM source\n    WHERE month >= DATE '2026-04-01'\n      AND month <= DATE '2026-06-30'\n      AND product IN ('motor')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (state)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_frequency"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+      },
+      "source": "custom_query",
+      "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+      },
+      "source": "custom_query",
+      "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+      "rows": 8,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-49b4f04edf14",
+      "run_id": "r-33dc83a2c3f5",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 245,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 14460,
+      "cost_usd": 0.038608,
+      "seconds": 12.8,
+      "request_id": "req_011Cg8kd1yAYjvh3DVfLSZFz"
+    },
+    {
+      "session_id": "s-49b4f04edf14",
+      "run_id": "r-33dc83a2c3f5",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 300,
+      "cache_read_input_tokens": 14460,
+      "cache_creation_input_tokens": 1156,
+      "cost_usd": 0.008786,
+      "seconds": 3.16,
+      "request_id": "req_011Cg8kdxh1TN7p8smRPUtYJ"
+    },
+    {
+      "session_id": "s-49b4f04edf14",
+      "run_id": "r-33dc83a2c3f5",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 249,
+      "cache_read_input_tokens": 15616,
+      "cache_creation_input_tokens": 417,
+      "cost_usd": 0.00666,
+      "seconds": 2.09,
+      "request_id": "req_011Cg8keCDbb8D24NEwsRMPX"
+    },
+    {
+      "session_id": "s-49b4f04edf14",
+      "run_id": "r-33dc83a2c3f5",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1109,
+      "cache_read_input_tokens": 16033,
+      "cache_creation_input_tokens": 366,
+      "cost_usd": 0.015216,
+      "seconds": 7.13,
+      "request_id": "req_011Cg8keMPGAmAPKw7HrbD9D"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-49b4f04edf14",
+  "run_id": "r-33dc83a2c3f5",
+  "numbers": {
+    "checked": 8,
+    "confirmed": 8,
+    "unconfirmed": []
+  },
+  "citations": {
+    "cited": 0,
+    "confirmed": 0,
+    "without_version": 0,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+1ba489d548",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the motor claim frequency by state in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01HnQA4S7BLBBuMsmCQHkT86",
+          "input": {
+            "metric": "claim_frequency",
+            "dimensions": [
+              "state"
+            ],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "motor"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_019RYxpfqFhfSsLCFtHJjxHS",
+          "input": {
+            "name": "claim_frequency"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01HnQA4S7BLBBuMsmCQHkT86",
+          "content": "{\"metric\": \"claim_frequency\", \"label\": \"Claim frequency\", \"unit\": \"claims per 1,000 policies per month\", \"definition\": \"1000 * claim_count / policy_months\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT state, count(*) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2026-04-01'\\n      AND loss_date <= DATE '2026-06-30'\\n      AND product IN ('motor')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT state, sum(policies_in_force) AS value\\n    FROM source\\n    WHERE month >= DATE '2026-04-01'\\n      AND month <= DATE '2026-06-30'\\n      AND product IN ('motor')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (state)\\nORDER BY ALL\", \"columns\": [\"state\", \"value\"], \"rows\": [[\"ACT\", 5.98776318940928], [\"NSW\", 7.947477792842583], [\"NT\", 4.566496754933243], [\"QLD\", 6.772709446039619], [\"SA\", 6.404190902526613], [\"TAS\", 7.807358993519892], [\"VIC\", 7.025071995942247], [\"WA\", 6.485938485363731]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019RYxpfqFhfSsLCFtHJjxHS",
+          "content": "{\"name\": \"claim_frequency\", \"label\": \"Claim frequency\", \"description\": \"Claims per 1,000 policies in force, per month.\", \"unit\": \"claims per 1,000 policies per month\", \"dimensions\": [\"state\", \"region\", \"product\"], \"definition\": \"1000 * claim_count / policy_months\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS4AUKEAgSGAI4AUIIdGhpbmtpbmcSDLWUHCfoyrWbsLz1+xoMNBozyLtUBnTRhQMnIjBv8COiBNi3mRqsykahMDmFT3w4WUE9GzsmN+QzPqSjpJvOs2kLCCc+bsAoctBd0Jkq/QSPbawoAsWJEbMnftWCWMCGDNg6QdJ/bRTqzFcAv481DjJkXGfWWxedt4Dm0hJ04yofSoLp+gZy7Wuc05Fni6R811NqyDOkfDm7dYbYZZtWHmk7gKMZO/dY38PcG9v4TkZBliTj9n51n9vJeHY3J8tpjqMNJQCk5SYHgpJpdg0H5MOBIVElClB8FnK9/bb8dolVVXwwOq/NQ29yFOs97F4bz+d6y8VBoP7Yin8NBebQbeN7wqRCE9OTfAPg4pc/c1mqCTS4pCw/Xnmet8jIN355126FoI7smdTinynjf+v6y+206AQs6mgBHUug4zE7mR5Cwrz9Qj09fIA7aiNsjDhyLGB/RyAC90xHlVZXLlke0rap3NVN+d1k5YCeZ3vSNBRICUrNIB1Y+M2EGg3ZgyYn6c1iJBQPv8KTQ0X/vZDV3a/yNSzKJqxvBn7OQzmdHCSYbN51opIhj7m/DBuDRDZTYyfJYjFeWccX2yljLRXdTlDOeDEZ+Nf8zfnTekauTUlHeFuyqyCCzemRnaPBTGvzdyrDy+QCdEM8Rgz3i/L8oRpYcFoXQjvcqTicxXTbDy9nO06/W2pDDxhIT66Hvc0n7wewfM5bHW0E1lEEoCjV/G5bvFeO4afcMifX41qUQaLBor3ytxj606Kh+tJYyeiWjmdgUzwc4JXfiMnRco3H1v7sZpT61NcohuStGkwa7J6J7+I4h3ZphLxNNuQHjJX4+akxIKmrs0TpinoXJG1U0RJIZFlmP5pKhaxAg8qlC7OPd6AUVQ2t0FsJLtYsybTYP1tZiKqj9WS5BxCObz0Wnis9/bltD1a6FN8wjthurflNTrwroLLxzR/b3V0wGAE=",
+          "thinking": "Q2 spans April through June, and with data extracted as of September 30 the quarter should be fairly complete, though reporting for June might lag slightly. I'll put together a compact SQL query for this.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01JS27MzhpSTnsE4Fkg1bcq3",
+          "input": {
+            "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JS27MzhpSTnsE4Fkg1bcq3",
+          "content": "{\"columns\": [\"state\", \"frequency\"], \"rows\": [[\"ACT\", 5.99], [\"NSW\", 7.95], [\"NT\", 4.57], [\"QLD\", 6.77], [\"SA\", 6.4], [\"TAS\", 7.81], [\"VIC\", 7.03], [\"WA\", 6.49]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01DGwziHxDafaTPoiymvpsUB",
+          "input": {
+            "sql": "SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DGwziHxDafaTPoiymvpsUB",
+          "content": "{\"columns\": [\"state\", \"frequency\"], \"rows\": [[\"ACT\", 5.99], [\"NSW\", 7.95], [\"NT\", 4.57], [\"QLD\", 6.77], [\"SA\", 6.4], [\"TAS\", 7.81], [\"VIC\", 7.03], [\"WA\", 6.49]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Motor claim frequency, defined as 1000 \u00d7 claims \u00f7 policy-months. Claims are counted by loss date from 2026-04-01 to 2026-06-30 (Q2 2026). Results are split by policy state. Exposure is taken from exposure_monthly.\",\"answer\":\"In Q2 2026, motor claim frequency per 1,000 policies per month was highest in NSW (7.95) and TAS (7.81). VIC was 7.03 and QLD 6.77. WA was 6.49, SA 6.40 and ACT 5.99. NT was lowest at 4.57. Q2 ended three months before the extract date, so late-reported claims will have little effect. The latest weeks of June may still be slightly understated.\",\"answer_sql\":\"SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state\",\"findings\":[{\"claim\":\"Motor claim frequency by state, Q2 2026 (claims per 1,000 policy-months)\",\"evidence_sql\":\"SELECT n.state, round(1000.0*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='motor' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='motor' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state\",\"key_numbers\":[{\"label\":\"NSW\",\"value\":7.95,\"unit\":\"per 1,000 per month\"},{\"label\":\"TAS\",\"value\":7.81,\"unit\":\"per 1,000 per month\"},{\"label\":\"VIC\",\"value\":7.03,\"unit\":\"per 1,000 per month\"},{\"label\":\"QLD\",\"value\":6.77,\"unit\":\"per 1,000 per month\"},{\"label\":\"WA\",\"value\":6.49,\"unit\":\"per 1,000 per month\"},{\"label\":\"SA\",\"value\":6.4,\"unit\":\"per 1,000 per month\"},{\"label\":\"ACT\",\"value\":5.99,\"unit\":\"per 1,000 per month\"},{\"label\":\"NT\",\"value\":4.57,\"unit\":\"per 1,000 per month\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"Late reporting: claims are reported days or weeks after the loss, so the end of June may be slightly incomplete.\",\"impact\":\"Frequencies may be marginally understated, mostly for third-party property claims. I did not run the data-quality check tool.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

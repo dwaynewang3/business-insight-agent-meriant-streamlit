@@ -1,0 +1,537 @@
+{
+  "case_id": "why-texas-cost-july-2026",
+  "repeat": 3,
+  "question": "Why did the average claim cost in Texas jump in July 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Average claim cost is incurred (paid plus open reserve) divided by claim count, by loss date, for the Texas region. The comparison is July 2026 with prior months, mainly June 2026. Incurred uses the claims and claim_payments tables, as the agreed metric does.",
+    "answer": "The jump is real. Texas average claim cost was about $13,368 for July 2026 losses, against $10,626 in June and $8,192 in May. The cause is the severe Dallas-Fort Worth hailstorm of 14\u201316 July 2026 (weather event WX-003). It produced 231 hail and wind_hail claims, about 74% of Texas's 311 July claims. Auto hail claims jumped from 8 in June to 133 in July. Home wind_hail claims jumped from 14 to 111, and they are expensive, averaging about $22.9k each. Excluding the DFW storm claims, July's average is $10,468, in line with June's $10,626. A few large fire and liability claims, such as liability at about $38k each, added a little. Claim counts were not the driver on their own. The average rose because many costly storm claims entered the pool at once. August fell back to $8,524.",
+    "answer_sql": "WITH s AS (SELECT c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT strftime(date_trunc('month',loss_date),'%Y-%m') AS month, round(sum(inc)/count(*)) AS avg_claim_cost_all, count(*) AS claims, round(sum(inc) FILTER (WHERE NOT storm)/count(*) FILTER (WHERE NOT storm)) AS avg_excl_dfw_storm_claims, count(*) FILTER (WHERE storm) AS storm_claims FROM s GROUP BY 1",
+    "findings": [
+      {
+        "claim": "July 2026 Texas hail and wind_hail claims spiked, in the same window as the severe DFW hailstorm of 14\u201316 July. Without those claims the average is back to the June level.",
+        "evidence_sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT storm, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY ROLLUP(storm)",
+        "key_numbers": [
+          {
+            "label": "July avg claim cost, all Texas",
+            "value": 13368,
+            "unit": "USD"
+          },
+          {
+            "label": "July avg excluding DFW storm claims",
+            "value": 10468,
+            "unit": "USD"
+          },
+          {
+            "label": "DFW storm claims",
+            "value": 231,
+            "unit": "claims"
+          },
+          {
+            "label": "Other July claims",
+            "value": 80,
+            "unit": "claims"
+          },
+          {
+            "label": "Avg cost of storm claims",
+            "value": 14372,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Texas hail and wind_hail claim counts jumped in July. Wind_hail (home) claims were costly, at about $22.9k each.",
+        "evidence_sql": "SELECT strftime(c.loss_date,'%Y-%m') m, c.cause, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) avg_inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.cause IN ('hail','wind_hail') AND c.loss_date>='2026-05-01' AND c.loss_date<'2026-09-01' GROUP BY 1,2 ORDER BY 2,1",
+        "key_numbers": [
+          {
+            "label": "Hail claims June",
+            "value": 8,
+            "unit": "claims"
+          },
+          {
+            "label": "Hail claims July",
+            "value": 133,
+            "unit": "claims"
+          },
+          {
+            "label": "Wind_hail claims June",
+            "value": 14,
+            "unit": "claims"
+          },
+          {
+            "label": "Wind_hail claims July",
+            "value": 111,
+            "unit": "claims"
+          },
+          {
+            "label": "Wind_hail avg July",
+            "value": 22898,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "External weather event (DFW hailstorm)",
+        "verdict": "supported",
+        "evidence": "Severe hailstorm WX-003 in Dallas-Fort Worth on 14\u201316 July. It matches the surge in hail and wind_hail claims, and removing those claims returns the average to about $10.5k."
+      },
+      {
+        "hypothesis": "Data problem (duplicate payments or reload inflating incurred)",
+        "verdict": "ruled_out",
+        "evidence": "Claims has no duplicates. The 159 duplicate payment rows come from a March 2026 reload (payments 2\u201313 March), so they don't touch July losses. The July spike is explained by real claims."
+      },
+      {
+        "hypothesis": "Incomplete recent month",
+        "verdict": "ruled_out",
+        "evidence": "July is more than two months old at the extract date, so it is largely complete. If anything, late reporting affects September."
+      },
+      {
+        "hypothesis": "Other causes (a few large fire, liability or bodily injury claims)",
+        "verdict": "inconclusive",
+        "evidence": "Fire and liability averages were higher in July, but on only 2\u20136 claims each. This is a minor contribution next to the storm."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "Payments reload 'reload-2026-03-14' contains 159 duplicate rows, which inflate paid amounts for some March claims.",
+        "impact": "Does not affect July losses. It slightly overstates the March 2026 Texas average claim cost."
+      },
+      {
+        "issue": "Open reserves on recent claims are estimates, and 15 reserve outliers exist, up to $178k.",
+        "impact": "July incurred for storm claims may still change as reserves develop."
+      }
+    ],
+    "charts": [
+      {
+        "title": "Texas average claim cost by loss month",
+        "sql": "SELECT CAST(date_trunc('month', c.loss_date) AS DATE) AS month, sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' GROUP BY 1 ORDER BY 1",
+        "type": "line",
+        "x": "month",
+        "y": "avg_claim_cost"
+      }
+    ],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.067011,
+  "seconds": 29.36,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "region",
+            "values": [
+              "Texas"
+            ]
+          }
+        ],
+        "grain": "month",
+        "start": "2025-01-01",
+        "end": "2026-09-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-01-01'\n  AND loss_date <= DATE '2026-09-30'\n  AND region IN ('Texas')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-05-01' AND c.loss_date<'2026-09-01') SELECT strftime(loss_date,'%Y-%m') m, cause, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY 1,2 ORDER BY 2,1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-05-01' AND c.loss_date<'2026-09-01') SELECT strftime(loss_date,'%Y-%m') m, cause, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY 1,2 ORDER BY 2,1",
+      "rows": 35,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT * FROM weather_events WHERE state='TX' AND start_date>='2026-05-01' ORDER BY start_date"
+      },
+      "source": "custom_query",
+      "sql": "SELECT * FROM weather_events WHERE state='TX' AND start_date>='2026-05-01' ORDER BY start_date",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT storm, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY ROLLUP(storm)"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT storm, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY ROLLUP(storm)",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.claim_id, c.loss_date, c.region, p.metro, c.cause, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT strftime(date_trunc('month',loss_date),'%Y-%m') AS month, round(sum(inc)/count(*)) AS avg_claim_cost_all, count(*) AS claims, round(sum(inc) FILTER (WHERE NOT storm)/count(*) FILTER (WHERE NOT storm)) AS avg_excl_dfw_storm_claims, count(*) FILTER (WHERE storm) AS storm_claims FROM s GROUP BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.claim_id, c.loss_date, c.region, p.metro, c.cause, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT strftime(date_trunc('month',loss_date),'%Y-%m') AS month, round(sum(inc)/count(*)) AS avg_claim_cost_all, count(*) AS claims, round(sum(inc) FILTER (WHERE NOT storm)/count(*) FILTER (WHERE NOT storm)) AS avg_excl_dfw_storm_claims, count(*) FILTER (WHERE storm) AS storm_claims FROM s GROUP BY 1",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-9ffde7b328cf",
+      "run_id": "r-449b217c957b",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 345,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 168,
+      "cost_usd": 0.005457,
+      "seconds": 2.57,
+      "request_id": "req_011Cg295ty2tgD8Db2xNKoHN"
+    },
+    {
+      "session_id": "s-9ffde7b328cf",
+      "run_id": "r-449b217c957b",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 432,
+      "cache_read_input_tokens": 8063,
+      "cache_creation_input_tokens": 2560,
+      "cost_usd": 0.012337,
+      "seconds": 3.06,
+      "request_id": "req_011Cg2966ES7D3EMwjQnEgRY"
+    },
+    {
+      "session_id": "s-9ffde7b328cf",
+      "run_id": "r-449b217c957b",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 397,
+      "cache_read_input_tokens": 10623,
+      "cache_creation_input_tokens": 1574,
+      "cost_usd": 0.010034,
+      "seconds": 2.94,
+      "request_id": "req_011Cg296KY8wnHwvQc3k6gtu"
+    },
+    {
+      "session_id": "s-9ffde7b328cf",
+      "run_id": "r-449b217c957b",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 555,
+      "cache_read_input_tokens": 12197,
+      "cache_creation_input_tokens": 496,
+      "cost_usd": 0.009233,
+      "seconds": 4.4,
+      "request_id": "req_011Cg296YFNFv5aKZJ6aP82r"
+    },
+    {
+      "session_id": "s-9ffde7b328cf",
+      "run_id": "r-449b217c957b",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2579,
+      "cache_read_input_tokens": 12693,
+      "cache_creation_input_tokens": 647,
+      "cost_usd": 0.02995,
+      "seconds": 15.94,
+      "request_id": "req_011Cg296sB9WKhjLsAKiReiU"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-9ffde7b328cf",
+  "run_id": "r-449b217c957b",
+  "numbers": {
+    "checked": 10,
+    "confirmed": 10,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why did the average claim cost in Texas jump in July 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Wwi9DZSYPkacfA1zvCwgXm",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01S85JvS8vnfddgxZ9697aP1",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_018fRHga1bgm4CjZBWLXCmr6",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_019jvvCcUrenf1z1zVw7EWMy",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "region",
+                "values": [
+                  "Texas"
+                ]
+              }
+            ],
+            "grain": "month",
+            "start": "2025-01-01",
+            "end": "2026-09-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Wwi9DZSYPkacfA1zvCwgXm",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01S85JvS8vnfddgxZ9697aP1",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_018fRHga1bgm4CjZBWLXCmr6",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019jvvCcUrenf1z1zVw7EWMy",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"USD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-01-01'\\n  AND loss_date <= DATE '2026-09-30'\\n  AND region IN ('Texas')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 8483.82536231884], [\"2025-02-01\", 6663.916034482759], [\"2025-03-01\", 9517.312602739725], [\"2025-04-01\", 9204.2065625], [\"2025-05-01\", 7379.0413], [\"2025-06-01\", 4999.3475], [\"2025-07-01\", 7706.967258064516], [\"2025-08-01\", 8226.718039215686], [\"2025-09-01\", 7328.092884615385], [\"2025-10-01\", 6846.119285714286], [\"2025-11-01\", 10104.886363636364], [\"2025-12-01\", 7266.145102040816], [\"2026-01-01\", 11852.588], [\"2026-02-01\", 10093.979285714286], [\"2026-03-01\", 8282.014310344828], [\"2026-04-01\", 8860.324725274726], [\"2026-05-01\", 8191.2009375], [\"2026-06-01\", 10625.534945054946], [\"2026-07-01\", 13367.55919614148], [\"2026-08-01\", 8524.006808510638], [\"2026-09-01\", 7501.1862686567165]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS0gUKEAgSGAI4AUIIdGhpbmtpbmcSDARMame4VkCO/fmBUBoMjDl/cD9yxMo2QLvBIjDkt5/vwmJ6LP7kXmdsHYmeuoScQ/bkdIQcc1fzWBbU+sX3cu0XmIQVkYqR/CKV3tcq7wR+J10kU7tQbX+gxWyvCzmbZGfYFiSeTlqabb9ZWh1aYfPykxQDAH/FsZaM0PL/bdj305Rcw+b5T5VPzdixj/AoomL6ZKo6Iq0WJW1OEWeYRQapMqkW0Wtz+wC0dGL+mLHc3UOEp8DgUIyzl0qH818VA4traljgtFuSTmTnqLy0hyFRIJaosddQjWNkA6HjjuTVoCrMFjA23fAMPBCcf4TF9xmFcAMrQ8YxGz1XZTBT6bfn9/8ftM1AajQbdXf597c1csGYQvwuoBopIYJtcYF8Cs6k3aN9d8kyMWjls84ITuHi6rjtgRC8v3g2oNBJLvQE6FUKSP1hJZLT4vmVInfojm1Z6llKnuy09domzoZJRxH9kQnSeD9Os4iMjp958O4Df69o7xBjensUOJMMswoSMb+z6Oa+oXrhNbu1dAaUTtX+P3Z75jX7bG0OXSp1L9bRJheoMUn8tdMx/Udtt9LUx+dImQYrn5UHsJiewsf0eH8uc2FMgYs0Ms8LuE1c29A+HNgHhBemgOTwGEgEgrJT+phDRtR6E0wtz3ydTu6NN30ZPsO2MyEd+Jx2PLkMGI3vZXQpS62tpL56qcbjGCQlxfnrJYDe5yCUVlfEtgVQYtEYK3iNZnOhgO+I3XJgsdcpcKx5IDsOqnLNeWgwSt6DvjQ2AS8wImDvp8ieaqnqCcOENo/3m46e7yj7qhnS3CGUBl9/FLApIwq1JJWou37bQ4BaWURkMXrVMYCK9yEG/drmTcgOrFEoLVaPTQvwiZxdMXgZ9NyzWJRw4m4m3sFsVpmPLjrMT1UxUkGqBTe5KQt02pNXF61ZE9s1sbKxyhgB",
+          "thinking": "That jump to 13,368 from the roughly 10.6k baseline in June and before is real and significant, so I should break it down by cause, product, metro area, shop, and any weather events that might correlate.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_018KDKRRKvMXhXq5og9ed6TT",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-05-01' AND c.loss_date<'2026-09-01') SELECT strftime(loss_date,'%Y-%m') m, cause, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY 1,2 ORDER BY 2,1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01F1KC3njT8DkADd3NBpyRc7",
+          "input": {
+            "sql": "SELECT * FROM weather_events WHERE state='TX' AND start_date>='2026-05-01' ORDER BY start_date"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_018KDKRRKvMXhXq5og9ed6TT",
+          "content": "{\"columns\": [\"m\", \"cause\", \"n\", \"avg_inc\", \"tot\"], \"rows\": [[\"2026-05\", \"bodily_injury\", 2, 28280.0, 56559.0], [\"2026-06\", \"bodily_injury\", 7, 13843.0, 96902.0], [\"2026-07\", \"bodily_injury\", 3, 19484.0, 58453.0], [\"2026-08\", \"bodily_injury\", 4, 13843.0, 55372.0], [\"2026-05\", \"collision\", 24, 4899.0, 117571.0], [\"2026-06\", \"collision\", 20, 5081.0, 101629.0], [\"2026-07\", \"collision\", 29, 4948.0, 143500.0], [\"2026-08\", \"collision\", 27, 6291.0, 169869.0], [\"2026-05\", \"fire\", 3, 14279.0, 42837.0], [\"2026-06\", \"fire\", 6, 40182.0, 241091.0], [\"2026-07\", \"fire\", 2, 58274.0, 116548.0], [\"2026-08\", \"fire\", 2, 22316.0, 44633.0], [\"2026-05\", \"glass\", 4, 435.0, 1741.0], [\"2026-06\", \"glass\", 10, 625.0, 6251.0], [\"2026-07\", \"glass\", 7, 757.0, 5298.0], [\"2026-08\", \"glass\", 11, 638.0, 7020.0], [\"2026-05\", \"hail\", 4, 4744.0, 18975.0], [\"2026-06\", \"hail\", 8, 3304.0, 26433.0], [\"2026-07\", \"hail\", 133, 6673.0, 887560.0], [\"2026-08\", \"hail\", 3, 2575.0, 7725.0], [\"2026-06\", \"liability\", 4, 14288.0, 57151.0], [\"2026-07\", \"liability\", 6, 38476.0, 230853.0], [\"2026-08\", \"liability\", 1, 13332.0, 13332.0], [\"2026-05\", \"theft\", 3, 6872.0, 20615.0], [\"2026-06\", \"theft\", 8, 9490.0, 75920.0], [\"2026-07\", \"theft\", 8, 6527.0, 52217.0], [\"2026-08\", \"theft\", 8, 6066.0, 48528.0], [\"2026-05\", \"water_damage\", 10, 7509.0, 75087.0], [\"2026-06\", \"water_damage\", 14, 10301.0, 144209.0], [\"2026-07\", \"water_damage\", 12, 10099.0, 121184.0], [\"2026-08\", \"water_damage\", 24, 11083.0, 266002.0], [\"2026-05\", \"wind_hail\", 14, 13632.0, 190851.0], [\"2026-06\", \"wind_hail\", 14, 15524.0, 217338.0], [\"2026-07\", \"wind_hail\", 111, 22898.0, 2541697.0], [\"2026-08\", \"wind_hail\", 14, 13484.0, 188777.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01F1KC3njT8DkADd3NBpyRc7",
+          "content": "{\"columns\": [\"event_id\", \"state\", \"area\", \"event_type\", \"start_date\", \"end_date\", \"severity\"], \"rows\": [[\"WX-003\", \"TX\", \"Dallas-Fort Worth\", \"hailstorm\", \"2026-07-14\", \"2026-07-16\", \"severe\"]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSqgYKEAgSGAI4AUIIdGhpbmtpbmcSDNhErpOtpwGZjkkPUhoMusvkEzwg9GqMraCmIjA9UbrM2wmqKb2vLgcbs2UwyYhHrITUF2sZ+dwkNRJf2qa7X+y7NOJ/tON+lpbwwpEqxwVzfZps4Fj5bjtQredsJYiPImWYCWM79GgAxPDa3LrpUMcAAMYKL5eWnT7ctQ9k+HSlXS7WNRL5tlwlZbuLBBFQ0ishffi7cimQh1aU7vYnV4FyQ2N8qzczq7VDiYn/FVvIwIxsozsBGEjZvGOG88xcAsrs7+EIMgHRuLj0scIymx5ephYF1WCdurR61HJRnVmUaTuWwlaau3SqNp4t0s+1ipLCQWVutQNoxVfkmRlN6GC0l34lAztPZnV2LsS6zyMBVWDjhOrPiUhOKQrlX/fGesu4RUsDauXZZNZKTvAwsVBvr7gvFzt2pR3xMv9mCTTXl4/tkQXJs10lScJAJJobpuUsvHna40YTlTBqEzPuQbjE8V01Hspcl23PToXGYBOm/cvygEEPWBj2Gz44BPASv6pqE/SRkUcnqMAWmOEmBKqehdbm2B4keGVgFZLQN1Ohq6exQ8Y+m+GgKHk/UaHkc09Zy0Y3E1KTZxauamgOgc6O1kvgvyFEI+S853nYx/PK9FQKaevdIe499BQqnukgDeXNIu+LrLZFiDNJmrne38vZGqYytgd5T96LWjDwVscVQABBxD8Qt6qzZINl/EvgHK5OzCBfAmC1+JT/8PW3QZ2a01OiiqX0w04ypZVygi6NspzNMXbrj8wMxfV3+SaKrxGNB22IGDgBf/C4IwHHHlGleaHa1dqUF5xt6r7LMrGFZS90QKlkBhmNtK/p7oLkTsOXhL6QSajU8/FQ3BjWMHzD0N4rr7G4hdVjarNwq+tUUQtJnFw+lcgOH53BbypQJZlq0zAEoGe8KZ6WmMwVl6T7PYexcym3JDqtyg9ELX3otKPEuvd0muaykv01kzVtlHs2vFokNB18E234m+t5OHZxnaT4TDyfQOptK2aa32tjRn98Ij2yUMvFQwSisb8hmorJ0XimNr243sGyreANcWvKvrx46tYYAQ==",
+          "thinking": "I want to isolate the hail spike effect\u2014comparing the July average with and without hail-storm claims included, and also cross-checking metro areas and loss dates to make sure I'm not missing a confounding pattern.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_013rKUmDGcN1xcTUtdHoWkGc",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT storm, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY ROLLUP(storm)"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_013rKUmDGcN1xcTUtdHoWkGc",
+          "content": "{\"columns\": [\"storm\", \"n\", \"avg_inc\", \"tot\"], \"rows\": [[null, 311, 13368.0, 4157311.0], [false, 80, 10468.0, 837425.0], [true, 231, 14372.0, 3319886.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS3wYKEAgSGAI4AUIIdGhpbmtpbmcSDN2sdAQSUqUB5Nd37xoM2sotiyxvFMUHGbcMIjD/SjsgveJOrYOiZLNbfDeOeBbAvimqxGns+MEQDTJOmhGMa5tzAmXDzCGEIouSDJIq/AWFbVRe4Y/YTzolbfXDsQZflxtXWfbn5CEhNfSlumUOPTcJL4GpqiSG2Id/LCaA/RJqUllMnbkRFbnhXqjqDvt3SuGaSCKs1SDRB5UKE+bpuxYZHBMQIZhwWKjTH70n7XwBOsxwcjuvODsRR1XuGf32ug+qxUYkoLy7acyDSG1NpqftJWI1bH4mrHUhPeaNMIu9g4qN5Z1j1LzH55VeK7WyO+gGZ+XVEQyRzAfqP5cZ9mELpteHOPSSW/f4BaUC6frCFLOYdA05fhI06QAlSKppi4j+QJGQvUuK0Hbqd7/WI2t8IQh4MPWCKM6G58qBB5AkJW5eAgCzvxSm4ZWj8q1DRP1TzhRVQEPzGW53T0Ztfsk0bKEsGmaaSgFnqC4BLnC3vZJwy94n3ibWVG3cVZZwAw0ZZHFjjz6cg9GRDmxb90aK9v4orJT2gS1Q8eK5gb4NAk+zSecWagVljNaBKevGnC2eqkSy3vXjExNY09dDmtLfk57vNz9oQkYMVmtSysl7n2nXUTKZjHnlgBQ7m4RoDuuM1Q5kWs5PZDN4+XSDNjBmvJasoDDqy/A2HBUENSztSavfrPVKh9U4zF2gHZDys2NFzRmpGkt9/KhSPZMI6KQTCnFJHRdH77oDI3/BoxFms+ayAmzBqp4i6l8VmXmrjLTpvGe54KEz9epZtLTuMvy5kTQpjGfENWxXRKEYMFlEGs/wgU7nH01D8TB2whdYg5LNDVrDecGCIlQehLHFYuW36OjFB8FEJZakgcdjiNXizsCw8i1EubBcv+4F0qhPtqSBK04wBYHxYSgkfFgzOkcvoqP3fadILei+PeI2hRbo0mBnhB7tDTvHv2wqOlk9vtGPwihwilNkJuZCVsUk3THsHfUywePVUXYvoOBuygoOcLOVjympu4uWGL5eTn4Yhjy/RyqQrG/DHFQ/GvLsF+C4ZIqwXs3zyjO2Xin9j9OtyeCI/5LkIWalFaGkIRgiq1vXOMAHNu3k9Oo5rhtAmBlq6OFtX5nCIgLCRxgB",
+          "thinking": "The non-storm estimate checks out at roughly 10,468 versus the 10,626 figure for June. For storm claims, 231 of the 311 claims drive both higher volume and greater severity, with wind/hail damage to home roofs averaging around 22.9k, pushing the overall average claim to 14,372.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01CSk6HGVjC6WrubikcGuCxH",
+          "input": {
+            "sql": "WITH s AS (SELECT c.claim_id, c.loss_date, c.region, p.metro, c.cause, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT strftime(date_trunc('month',loss_date),'%Y-%m') AS month, round(sum(inc)/count(*)) AS avg_claim_cost_all, count(*) AS claims, round(sum(inc) FILTER (WHERE NOT storm)/count(*) FILTER (WHERE NOT storm)) AS avg_excl_dfw_storm_claims, count(*) FILTER (WHERE storm) AS storm_claims FROM s GROUP BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01CSk6HGVjC6WrubikcGuCxH",
+          "content": "{\"columns\": [\"month\", \"avg_claim_cost_all\", \"claims\", \"avg_excl_dfw_storm_claims\", \"storm_claims\"], \"rows\": [[\"2026-07\", 13368.0, 311, 10468.0, 231]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Average claim cost is incurred (paid plus open reserve) divided by claim count, by loss date, for the Texas region. The comparison is July 2026 with prior months, mainly June 2026. Incurred uses the claims and claim_payments tables, as the agreed metric does.\",\"answer\":\"The jump is real. Texas average claim cost was about $13,368 for July 2026 losses, against $10,626 in June and $8,192 in May. The cause is the severe Dallas-Fort Worth hailstorm of 14\u201316 July 2026 (weather event WX-003). It produced 231 hail and wind_hail claims, about 74% of Texas's 311 July claims. Auto hail claims jumped from 8 in June to 133 in July. Home wind_hail claims jumped from 14 to 111, and they are expensive, averaging about $22.9k each. Excluding the DFW storm claims, July's average is $10,468, in line with June's $10,626. A few large fire and liability claims, such as liability at about $38k each, added a little. Claim counts were not the driver on their own. The average rose because many costly storm claims entered the pool at once. August fell back to $8,524.\",\"answer_sql\":\"WITH s AS (SELECT c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT strftime(date_trunc('month',loss_date),'%Y-%m') AS month, round(sum(inc)/count(*)) AS avg_claim_cost_all, count(*) AS claims, round(sum(inc) FILTER (WHERE NOT storm)/count(*) FILTER (WHERE NOT storm)) AS avg_excl_dfw_storm_claims, count(*) FILTER (WHERE storm) AS storm_claims FROM s GROUP BY 1\",\"findings\":[{\"claim\":\"July 2026 Texas hail and wind_hail claims spiked, in the same window as the severe DFW hailstorm of 14\u201316 July. Without those claims the average is back to the June level.\",\"evidence_sql\":\"WITH s AS (SELECT c.*, p.metro, coalesce(pay.paid,0)+c.reserve_amount AS inc, (c.cause IN ('hail','wind_hail') AND c.loss_date BETWEEN DATE '2026-07-14' AND DATE '2026-07-16' AND p.metro='Dallas-Fort Worth') AS storm FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.loss_date>='2026-07-01' AND c.loss_date<'2026-08-01') SELECT storm, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s GROUP BY ROLLUP(storm)\",\"key_numbers\":[{\"label\":\"July avg claim cost, all Texas\",\"value\":13368,\"unit\":\"USD\"},{\"label\":\"July avg excluding DFW storm claims\",\"value\":10468,\"unit\":\"USD\"},{\"label\":\"DFW storm claims\",\"value\":231,\"unit\":\"claims\"},{\"label\":\"Other July claims\",\"value\":80,\"unit\":\"claims\"},{\"label\":\"Avg cost of storm claims\",\"value\":14372,\"unit\":\"USD\"}],\"confidence\":\"high\"},{\"claim\":\"Texas hail and wind_hail claim counts jumped in July. Wind_hail (home) claims were costly, at about $22.9k each.\",\"evidence_sql\":\"SELECT strftime(c.loss_date,'%Y-%m') m, c.cause, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) avg_inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' AND c.cause IN ('hail','wind_hail') AND c.loss_date>='2026-05-01' AND c.loss_date<'2026-09-01' GROUP BY 1,2 ORDER BY 2,1\",\"key_numbers\":[{\"label\":\"Hail claims June\",\"value\":8,\"unit\":\"claims\"},{\"label\":\"Hail claims July\",\"value\":133,\"unit\":\"claims\"},{\"label\":\"Wind_hail claims June\",\"value\":14,\"unit\":\"claims\"},{\"label\":\"Wind_hail claims July\",\"value\":111,\"unit\":\"claims\"},{\"label\":\"Wind_hail avg July\",\"value\":22898,\"unit\":\"USD\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"External weather event (DFW hailstorm)\",\"verdict\":\"supported\",\"evidence\":\"Severe hailstorm WX-003 in Dallas-Fort Worth on 14\u201316 July. It matches the surge in hail and wind_hail claims, and removing those claims returns the average to about $10.5k.\"},{\"hypothesis\":\"Data problem (duplicate payments or reload inflating incurred)\",\"verdict\":\"ruled_out\",\"evidence\":\"Claims has no duplicates. The 159 duplicate payment rows come from a March 2026 reload (payments 2\u201313 March), so they don't touch July losses. The July spike is explained by real claims.\"},{\"hypothesis\":\"Incomplete recent month\",\"verdict\":\"ruled_out\",\"evidence\":\"July is more than two months old at the extract date, so it is largely complete. If anything, late reporting affects September.\"},{\"hypothesis\":\"Other causes (a few large fire, liability or bodily injury claims)\",\"verdict\":\"inconclusive\",\"evidence\":\"Fire and liability averages were higher in July, but on only 2\u20136 claims each. This is a minor contribution next to the storm.\"}],\"data_quality_issues\":[{\"issue\":\"Payments reload 'reload-2026-03-14' contains 159 duplicate rows, which inflate paid amounts for some March claims.\",\"impact\":\"Does not affect July losses. It slightly overstates the March 2026 Texas average claim cost.\"},{\"issue\":\"Open reserves on recent claims are estimates, and 15 reserve outliers exist, up to $178k.\",\"impact\":\"July incurred for storm claims may still change as reserves develop.\"}],\"charts\":[{\"title\":\"Texas average claim cost by loss month\",\"sql\":\"SELECT CAST(date_trunc('month', c.loss_date) AS DATE) AS month, sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='Texas' GROUP BY 1 ORDER BY 1\",\"type\":\"line\",\"x\":\"month\",\"y\":\"avg_claim_cost\"}],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,319 @@
+{
+  "case_id": "what-loss-ratio-by-product-2025",
+  "question": "What was the loss ratio for each product in 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "interpretation": "Loss ratio is incurred losses (paid plus reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and used 2025 earned premium from exposure_monthly. I split the result by product (auto and home). I excluded 159 payment rows that were loaded twice, which makes the figures slightly lower than the standard metric output.",
+    "answer": "2025 loss ratio was about 53.6% for auto and 54.3% for home. Auto incurred was $15.96M on $29.77M earned premium. Home incurred was $13.02M on $23.99M earned premium. The standard metric, which counts the duplicated payment rows, gives 53.7% for auto and 54.8% for home. The difference is small, but the duplicates do overstate the ratio slightly, especially for home. 2025 is a full year, so late reporting should matter little, but a few late-reported 2025 claims, especially bodily injury and liability, may still be missing.",
+    "answer_sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio FROM inc JOIN ep USING(product) ORDER BY product",
+    "findings": [
+      {
+        "claim": "De-duplicated 2025 loss ratios are auto 53.6% and home 54.3%.",
+        "evidence_sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio, incurred, prem FROM inc JOIN ep USING(product) ORDER BY product",
+        "key_numbers": [
+          {
+            "label": "Auto loss ratio",
+            "value": 0.5362,
+            "unit": "ratio"
+          },
+          {
+            "label": "Home loss ratio",
+            "value": 0.5428,
+            "unit": "ratio"
+          },
+          {
+            "label": "Auto incurred",
+            "value": 15960031.87,
+            "unit": "USD"
+          },
+          {
+            "label": "Home incurred",
+            "value": 13020747.97,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "The reload-2026-03-14 batch loaded 159 payment rows that exactly repeat existing payments (payments dated 2026-03-02 to 2026-03-13, $893K in total). The batch was loaded outside the nightly process.",
+        "impact": "The standard loss_ratio metric counts these rows. This overstates 2025 loss ratios slightly (auto 53.74% vs 53.62%, home 54.79% vs 54.28%). Only 15 of the duplicate rows belong to 2025 loss-date claims."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payment rows from reload-2026-03-14",
+        "reason": "159 payment rows repeat existing payments and inflate paid and incurred amounts in the official metrics."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.034562,
+  "seconds": 20.83,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "loss_ratio",
+        "dimensions": [
+          "product"
+        ],
+        "filters": [],
+        "grain": null,
+        "start": "2025-01-01",
+        "end": "2025-12-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT product, sum(incurred) AS value\n    FROM source\n    WHERE loss_date >= DATE '2025-01-01'\n      AND loss_date <= DATE '2025-12-31'\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT product, sum(earned_premium) AS value\n    FROM source\n    WHERE month >= DATE '2025-01-01'\n      AND month <= DATE '2025-12-31'\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT product, 1 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (product)\nORDER BY ALL",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "loss_ratio"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio, incurred, prem FROM inc JOIN ep USING(product) ORDER BY product"
+      },
+      "source": "custom_query",
+      "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio, incurred, prem FROM inc JOIN ep USING(product) ORDER BY product",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) n, sum(p.amount) amt, count(*) FILTER (WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31') n2025 FROM claim_payments p JOIN claims c USING(claim_id) WHERE p.load_batch LIKE 'reload-%'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) n, sum(p.amount) amt, count(*) FILTER (WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31') n2025 FROM claim_payments p JOIN claims c USING(claim_id) WHERE p.load_batch LIKE 'reload-%'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-3c5aa7267c63",
+      "run_id": "r-5a966ef376d3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 279,
+      "cache_read_input_tokens": 7340,
+      "cache_creation_input_tokens": 163,
+      "cost_usd": 0.004673,
+      "seconds": 3.21,
+      "request_id": "req_011CfpwqmNAgt2FgcEc8X6nF"
+    },
+    {
+      "session_id": "s-3c5aa7267c63",
+      "run_id": "r-5a966ef376d3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 585,
+      "cache_read_input_tokens": 7503,
+      "cache_creation_input_tokens": 1661,
+      "cost_usd": 0.011507,
+      "seconds": 5.35,
+      "request_id": "req_011Cfpwr1GakAdYNPWxTpFFi"
+    },
+    {
+      "session_id": "s-3c5aa7267c63",
+      "run_id": "r-5a966ef376d3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1459,
+      "cache_read_input_tokens": 9164,
+      "cache_creation_input_tokens": 782,
+      "cost_usd": 0.018382,
+      "seconds": 12.16,
+      "request_id": "req_011CfpwrQJg68qJQxRZkQRP3"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "session_id": "s-3c5aa7267c63",
+  "run_id": "r-5a966ef376d3",
+  "agent_version": "0.1.0+d06afa87a3",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the loss ratio for each product in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_018FYmZhAHXhznY1xMpMtmZ1",
+          "input": {
+            "metric": "loss_ratio",
+            "dimensions": [
+              "product"
+            ],
+            "filters": [],
+            "grain": null,
+            "start": "2025-01-01",
+            "end": "2025-12-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01U4CLtAzioJDhpXDccro9Bs",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01H9zMuXjdhDZG5hTxRRB7Ux",
+          "input": {
+            "name": "loss_ratio"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_018FYmZhAHXhznY1xMpMtmZ1",
+          "content": "{\"metric\": \"loss_ratio\", \"label\": \"Loss ratio\", \"unit\": \"ratio\", \"definition\": \"1 * incurred_losses / earned_premium\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT product, sum(incurred) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2025-01-01'\\n      AND loss_date <= DATE '2025-12-31'\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT product, sum(earned_premium) AS value\\n    FROM source\\n    WHERE month >= DATE '2025-01-01'\\n      AND month <= DATE '2025-12-31'\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT product, 1 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (product)\\nORDER BY ALL\", \"columns\": [\"product\", \"value\"], \"rows\": [[\"auto\", 0.5373894196860789], [\"home\", 0.5479063611894738]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01U4CLtAzioJDhpXDccro9Bs",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01H9zMuXjdhDZG5hTxRRB7Ux",
+          "content": "{\"name\": \"loss_ratio\", \"label\": \"Loss ratio\", \"description\": \"Incurred losses divided by earned premium.\", \"unit\": \"ratio\", \"dimensions\": [\"state\", \"region\", \"product\"], \"definition\": \"1 * incurred_losses / earned_premium\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQShgYKEAgSGAI4AUIIdGhpbmtpbmcSDLOi4EV/AVgk4IcxsRoMox/N8oQEJbpsy5ojIjBEbar67kARl1ZUMIRPwgZK81qNPUhlVAu4z/qKm7/hLDDv5Mhvquop7vrg6mwyVsAqowXKFxNwPZBd2EcmfKE6PdjjHGt3/jYjkuxosE8WP7bYXFMb97kqSiXVNOW8KHCK0PJi+KZ0fJSLtWv7cbnm9PFoRVDHIhN5gf1BETBW5vI9ft6GuXCAL0dg+mNyvd2ELon8XyNQWyxH/hpe1KD+96ihv2YH7tcYq5pBc9Dq9z0Usx5td5/lKfkiuK2iO02HSxMgVpZrkeV80ifXLAuyls7yXRLfe9YfCZd9bNtKXr8OibhHypWLLBRsZgQSemBe1PIccIRc4ziqJtkg9stncPD5XerTjaz3Rop4PaESXkywZvwZuS8mSDWbgZO59HZX4jQW/FX+qkax0iQs5myw9s86oBdisIJtJkmujWaXWSozv8MGSd5lU68SpA+aZwDh1puaF8P0cIKWn2+VxGQyWE46cFBMP8Ex2loXxyM5yAXNNrIAyiDZNsRJNB2r0CZwgIPA973C5ltg+vJp+ve7SZPzBjKh0el4S9RVMPrMUNRtu1/UfXphEPGQ0+FW9aiL3sOdzpVcO9DbsN3DXdxECul7iM7mqU7/kBIK4e4jXKhChkwp1Rjn8DVDlh8VtmVKp4jyIIH1SoYGOSXU13vEWS0Naj6opNVQPe3T0gd7oUBCAD3M7fK7/Xjz8tJmbbvrQLjRGuyU365cTWKfnHrWU8ufiDE+p7Kfv2feJl86Idc8SkFy8yMNTfvYEirZvf6VTcL6cH+TzREYZ9EvONt4oHJi7lDhybxq7gljPXHJ7z4GOrsF+LIjytjVIfFllNL+lDfW1TVwP7455sNQ0d7y8jnl2Tc3ieAdXUgWw3acpa8qN/2QEAZ1F1X6RK2+2Tpk55pZfbEh73bEQYMLAHD4KW4aFtlX/PvNdIshuOcOuzcR83ckfEVaaEYb+An880tRGwtuNTUYAQ==",
+          "thinking": "I'm noticing 159 duplicate rows in the reload batch tied to March 2026 payments, likely affecting claims with 2025 loss dates, so I need to query for the deduplicated ratio to account for this.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01YGc5DjPeUgXo6WzitqA6PN",
+          "input": {
+            "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio, incurred, prem FROM inc JOIN ep USING(product) ORDER BY product"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01GC43v2N81psmWdzTa5W74R",
+          "input": {
+            "sql": "SELECT count(*) n, sum(p.amount) amt, count(*) FILTER (WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31') n2025 FROM claim_payments p JOIN claims c USING(claim_id) WHERE p.load_batch LIKE 'reload-%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01YGc5DjPeUgXo6WzitqA6PN",
+          "content": "{\"columns\": [\"product\", \"loss_ratio\", \"incurred\", \"prem\"], \"rows\": [[\"auto\", 0.536159754190728, 15960031.87, 29767306.75], [\"home\", 0.5427875524740468, 13020747.97, 23988663.54]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01GC43v2N81psmWdzTa5W74R",
+          "content": "{\"columns\": [\"n\", \"amt\", \"n2025\"], \"rows\": [[159, 892998.75, 15]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSqAYKEAgSGAI4AUIIdGhpbmtpbmcSDDHxM+Va4GZz2XgJaxoMJTOI7Kj7qaWBxXsGIjAOFIuOuvMutUh6fleRWnIdER9B0s2zYzuKYtc0+XwyVSxVVzRqgq2lnDR9MwhIkLsqxQWH4kBBfiwAinttoF9gc3q43k4IIheFn10dYeB+gfWeX6sAdBK99N7n/Yb6etwmWI6/tfL5qHKrVsUsJ7hMDbbeDb/jMdvKdFWzaOnmDsoYIAfrRUJ2bb5NXUhd6mwL6Et5ofV+DbMSfGu/8iHgwh7XJikVFJR3wwKpEVz+ETzbEgKso6c+OJ1yxndZZ2+6XBZDAj/xyz74KVMyZvBJqLyhE5JbSLsVfPnjr/fh8sPsKK/yfp6MYPGq9b7SWdZmHyODCprcwfPNceSLOPj8gW1h5NG1Cb5NRhkRa0B4F3rnMz29+TycOTYLfuswhxgGVBllmRUAlVeKxnDgFA/r14vn5qTBzdFb0YyWTxYTM000kXAnHwOB1VUUuj1cdtGmM5IMCa7n8EhAdKH2U66iQdQWPTJD1p5mYvqkSNFK+z0sni6FBrXZB99amKmB7koccmVvMgn1YjYekJP6Tg0v1f7DiKQBHRYrAMJ8ylTwuvILj/WH4bKLhoNlO+pDoRIQW/LytGDaAMhlL3QK8m7USLnv9aTaEASbDiM3DN+6Pc/u2ndxHGyeDQpWKEqN4Gg+pc0L5RW2y0W3dxJVQC1Ns0wrxe3fNpCuC6h2UVVDgeCa53mIki14tm4cHWPS2qzIC8TT6QbyG8mbLFx0POO1owHI1ZE222UO7xOySewBrSSgAlLE2m1lru3SJ3YFKLYeIe+2o8XJaWRofDaK4Wrz4Uuj4cj2ZozqxCrfluLKbLsB2vSRTbNXVwpqx0udxMLYa1lnh1vRq8O1OYv0+4ek59y84jTqUS73KvHzZxtANTVyHERsZ9JRDKS5AaZlgFEVtHEXDLuupkesKdA7ebvkhPzC4kCcEFDHyowC0fSxHbJp57r5Iscw8LmPHpycObG8ROqkHSNRj4jIdHR0u82UYVVXVj9mQUl3VmAaok2riHRDvpJRi4DWGAE=",
+          "thinking": "Confirming the 159 reload rows are exact duplicates, so excluding them is correct\u2014I'll answer using the deduplicated figures.\n\n",
+          "type": "thinking"
+        },
+        {
+          "text": "{\"status\":\"answered\",\"interpretation\":\"Loss ratio is incurred losses (paid plus reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and used 2025 earned premium from exposure_monthly. I split the result by product (auto and home). I excluded 159 payment rows that were loaded twice, which makes the figures slightly lower than the standard metric output.\",\"answer\":\"2025 loss ratio was about 53.6% for auto and 54.3% for home. Auto incurred was $15.96M on $29.77M earned premium. Home incurred was $13.02M on $23.99M earned premium. The standard metric, which counts the duplicated payment rows, gives 53.7% for auto and 54.8% for home. The difference is small, but the duplicates do overstate the ratio slightly, especially for home. 2025 is a full year, so late reporting should matter little, but a few late-reported 2025 claims, especially bodily injury and liability, may still be missing.\",\"answer_sql\":\"WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio FROM inc JOIN ep USING(product) ORDER BY product\",\"findings\":[{\"claim\":\"De-duplicated 2025 loss ratios are auto 53.6% and home 54.3%.\",\"evidence_sql\":\"WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), inc AS (SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN pay USING(claim_id) WHERE c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1), ep AS (SELECT product, sum(earned_premium) prem FROM exposure_monthly WHERE month BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY 1) SELECT product, incurred/prem AS loss_ratio, incurred, prem FROM inc JOIN ep USING(product) ORDER BY product\",\"key_numbers\":[{\"label\":\"Auto loss ratio\",\"value\":0.5362,\"unit\":\"ratio\"},{\"label\":\"Home loss ratio\",\"value\":0.5428,\"unit\":\"ratio\"},{\"label\":\"Auto incurred\",\"value\":15960031.87,\"unit\":\"USD\"},{\"label\":\"Home incurred\",\"value\":13020747.97,\"unit\":\"USD\"}],\"confidence\":\"medium\"}],\"data_quality_issues\":[{\"issue\":\"The reload-2026-03-14 batch loaded 159 payment rows that exactly repeat existing payments (payments dated 2026-03-02 to 2026-03-13, $893K in total). The batch was loaded outside the nightly process.\",\"impact\":\"The standard loss_ratio metric counts these rows. This overstates 2025 loss ratios slightly (auto 53.74% vs 53.62%, home 54.79% vs 54.28%). Only 15 of the duplicate rows belong to 2025 loss-date claims.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payment rows from reload-2026-03-14\",\"reason\":\"159 payment rows repeat existing payments and inflate paid and incurred amounts in the official metrics.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

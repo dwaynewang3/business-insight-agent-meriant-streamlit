@@ -1,0 +1,384 @@
+{
+  "case_id": "what-average-claim-cost-auto-tx-2026-q2",
+  "question": "What was the average claim cost for auto claims in Texas in Q2 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "interpretation": "Average claim cost, using the company definition: incurred (paid plus open reserve) divided by claim count. It covers auto claims in Texas with a loss date from 2026-04-01 to 2026-06-30, which is Q2 2026 counted by loss date.",
+    "answer": "Auto claims in Texas with Q2 2026 loss dates averaged about $6,000 per claim ($5,999.66) across 138 claims. Q2 ended three months before the extract date, so late reporting should have little effect on this figure. Some open claims may still develop, because their reserves are estimates.",
+    "answer_sql": "SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'",
+    "findings": [
+      {
+        "claim": "Average incurred cost per auto claim in Texas, Q2 2026 losses, is about $6,000 across 138 claims.",
+        "evidence_sql": "SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'",
+        "key_numbers": [
+          {
+            "label": "Average claim cost",
+            "value": 5999.66,
+            "unit": "USD"
+          },
+          {
+            "label": "Claims",
+            "value": 138,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "The claim_payments table has 159 duplicate rows from the reload-2026-03-14 batch, covering payments from 2026-03-02 to 2026-03-13.",
+        "impact": "None on this answer. Those payments predate the Q2 losses, so they can't belong to the claims counted here."
+      },
+      {
+        "issue": "15 reserve amounts in the claims table are unusually large, and the largest is $178,549.",
+        "impact": "Large reserves can pull up an average over a small set of claims. I did not exclude them."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payment rows from reload-2026-03-14",
+        "reason": "159 payment rows were loaded twice and will overstate paid amounts for the affected claims."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.032139,
+  "seconds": 16.48,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "auto"
+            ]
+          },
+          {
+            "dimension": "state",
+            "values": [
+              "TX"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2026-04-01'\n  AND loss_date <= DATE '2026-06-30'\n  AND product IN ('auto')\n  AND state IN ('TX')",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-c07ce1ff8eca",
+      "run_id": "r-3bc6f7540c37",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 102,
+      "cache_read_input_tokens": 7340,
+      "cache_creation_input_tokens": 172,
+      "cost_usd": 0.002926,
+      "seconds": 2.22,
+      "request_id": "req_011CfpwsLZinBkCT5NiVmZj8"
+    },
+    {
+      "session_id": "s-c07ce1ff8eca",
+      "run_id": "r-3bc6f7540c37",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 211,
+      "cache_read_input_tokens": 7512,
+      "cache_creation_input_tokens": 891,
+      "cost_usd": 0.005844,
+      "seconds": 1.68,
+      "request_id": "req_011CfpwsVv3aTotm1MHYqWE4"
+    },
+    {
+      "session_id": "s-c07ce1ff8eca",
+      "run_id": "r-3bc6f7540c37",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 93,
+      "cache_read_input_tokens": 8403,
+      "cache_creation_input_tokens": 618,
+      "cost_usd": 0.00416,
+      "seconds": 2.5,
+      "request_id": "req_011Cfpwsd6t5FKR4CkXXwyVj"
+    },
+    {
+      "session_id": "s-c07ce1ff8eca",
+      "run_id": "r-3bc6f7540c37",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 326,
+      "cache_read_input_tokens": 9021,
+      "cache_creation_input_tokens": 673,
+      "cost_usd": 0.006751,
+      "seconds": 3.59,
+      "request_id": "req_011Cfpwsp3TKFeG7P8uqceVN"
+    },
+    {
+      "session_id": "s-c07ce1ff8eca",
+      "run_id": "r-3bc6f7540c37",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 957,
+      "cache_read_input_tokens": 9694,
+      "cache_creation_input_tokens": 378,
+      "cost_usd": 0.012458,
+      "seconds": 6.29,
+      "request_id": "req_011Cfpwt5V9HfxEHq2Fuig5c"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "session_id": "s-c07ce1ff8eca",
+  "run_id": "r-3bc6f7540c37",
+  "agent_version": "0.1.0+d06afa87a3",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost for auto claims in Texas in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VUrPQFm56RFvvAhrzTMebu",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01PiPWvRi2FNtKuFk86kRPkA",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VUrPQFm56RFvvAhrzTMebu",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01PiPWvRi2FNtKuFk86kRPkA",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01QHetCTwLRg71J98Th6a7Vj",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "auto"
+                ]
+              },
+              {
+                "dimension": "state",
+                "values": [
+                  "TX"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01QHetCTwLRg71J98Th6a7Vj",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"USD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2026-04-01'\\n  AND loss_date <= DATE '2026-06-30'\\n  AND product IN ('auto')\\n  AND state IN ('TX')\", \"columns\": [\"value\"], \"rows\": [[5999.6557246376815]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSzQUKEAgSGAI4AUIIdGhpbmtpbmcSDJYUrMk8LucoLiG0DhoMnE2Jn4HIVy2SCIUWIjC9GI4zSEKNlThhLpO59c8MfDFHXba5K75bA99lWiNbyr2lCTCwkB9CLpCT45HOlGUq6gR2VipQHWedU1HKHUv5SaqY+FpOsu/jXh1ZYwZmza3Ax6ZAOGtJkuOBykGBIf4CMiiTHUPibGI96mrwy9uUuOY/2bWjzs/j3shiEDR6ZnyTLiJDTKCRiDhxx94iwns1Tid0FJgqDinMsyoWRnMy4xCKFfg2GFUyImOhOr5tk9tLzRGkEuubKmZfGicqpJGYjxWeN/YduM/nd0BmzjYPPmT33TbCXg+UNlNZrvnN28qsV7o2lrLsdO4BQzsfrvNxMmI0OPS2tvLCiDnL+st91MIDKdxTubP5W5koc2Z74qYEymgG+lT6DTb5IsKbc0YwEfQrM57Ov+w1/s1dlmHQTUEGyW5ZiZBqcueSsyxoqV/kiDJYBguY0BLe3JRV9PSSyDwJBu2WnBzDRDGk71IG9yHgnVIWKNqagUf1jJxj+wNfFZcjapH1lLm+qU40se/r9LNDDKR1MWQi0amvYNUTbE9x97q4IMLebmU8uwswci9ll61k4HErCWGQ9xrPFuQwc8enHbNc+2BlgyjwPbLy2ESZcbb0TMTLPIygUkViGU9nKrNYa3ER9w6D7TpbNZhW78DEYgqfpbVDjm6cgt1uHVqbDl9QfprT47eIcf+RYt7EXo3osynXM6vQ2POmVbu+w450z6/xt8jc3cC7GBnJGXT4sO61ZACrOEHArt1z6bij9v37YxkJ7dGaAlxFewZMWNRQi3AFq7KluIDkvunxT9p5HTfZRrcn5tnOaYFhT5FgmgPCLZING+JZ1uaSVkzAHtwwV1eyGyZqFP9YOCYQDu2gdfuWb6kobJmHLa3AgmVhFbYmpOerUx35dKQYAQ==",
+          "thinking": "I should check whether claim_payments data loaded outside the nightly batches, since that could mean duplicate entries are slipping in.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01FdkmqCr4kXwtxC18LfQ9dU",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01FdkmqCr4kXwtxC18LfQ9dU",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSzwcKEAgSGAI4AUIIdGhpbmtpbmcSDMgLDF/b9SrJL/PVVBoMhQwjz++SDH8NGwX1IjASGfcg6qp1u442oLcSbdplKZSkj/VDjTyVhQbCiWXUBX+fmpKPou3Tx+oybfFQfBcq7AYBMzvtT+03G1ebqhyKo9mzPAutSj7yoaJJa1KInxPsl9zZd4Jks7aU3lycVJyPoUphEkkFGpmtL34tL7aEK8glP8Q7wNo76HUTMygw4S3ydm6n4nF1w1Xg/dMzC4u4xAK8pCq9zm2r+de+8Gr275TgD0oyrM/65ihfsXdAN/HUNwLT0SdUBwNUA0RGYRvtlWeVRRj0/kTiNuSg8UIAHj41QWvu+wCfdlo3Y0PhSMwuYwONnYOvsaYIAmgN95vTNGv3oxQv95Apq9VSMyMzNJizqsyUqy+RTfV4PVQ9xLft9c3XxxKRgbulLmbSwCh40EO7erGqdDTB3hm+DWSVYw8bICH6T55OvatkLZ+PSpfnKUBeSZUDOTq5GW7r2F+rf3SnT5LDna/GbcNabdo41zp0/G0rJwoDLUYla/iqAexcC4WE5xtrl9qbn2MzKd16qdmXyZohXaKZJqb3UXAy/mgQATFUlqJpiCi7D3aSp/s6mKsM+/nBaZFzh3La56ayQnR2nVvGKJfsNbr9dq88XbMdMdDxdfKKEc2wVKkoWUocZKHZvPoNeNEb0KIz75JozgQ0r3b48VWtglRHdcg78IN1Ef0uH/jsbJf1+v7GfPW+lAiEGI97bgoAIYX2KQkdHV0DnroW+Kp2eFXazNujDAi1qPO/xly59FPAs5YXriehHmJyBbTDUFBfHGeFTGE0c0lD3P+MAADX1XiFU3474wMPQwfB57e+hn9cBKSJ/WNWxZfHRaJLOegoRFBUZDqz+ahj1EIhslMMuVsx2bDuHtgvku5V8oKOl+1s5kY3Q/Cpvamy9U8cJi2S2kjVP0h3pkCS3X3qQgqi8XAXNvW7PmfEP2eGHi1ml22itqIesopB4DgZvN+J9xToToNjCv3aNplKkBReDRPbAENy+QfnMOzGXl73S40qgeGVC5fdngsUMbKIdd4w6THVBwOJ65Jrhx259F7WDM2Jcirze0KHlLhQ57V6VpgDs567yOAIr2yYL5MfCtOLWdCrWJ5ccWxy67tsEL7TbnRq36HXiVekObWXujmr3fQEdmXJeXNmEARXgH0cYvRKVUSWhCOgow1pQd08WXA+oqUAg48uMWBHVhHAElCAeFwVcG5lm8FVad5uC7j4EKO6gqFGmtwNjhnY6wEb76u22D6BBz9yRHgYAQ==",
+          "thinking": "The duplicate reload payments in March 2-13 shouldn't affect Q2 loss claims, since those losses occur after April 1 and their payments would come afterward too, so there's no overlap to worry about.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_019zEmmiUyU4wCMdaoQLkpsP",
+          "input": {
+            "sql": "SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019zEmmiUyU4wCMdaoQLkpsP",
+          "content": "{\"columns\": [\"avg_claim_cost\", \"claims\"], \"rows\": [[5999.6557246376815, 138]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"interpretation\":\"Average claim cost, using the company definition: incurred (paid plus open reserve) divided by claim count. It covers auto claims in Texas with a loss date from 2026-04-01 to 2026-06-30, which is Q2 2026 counted by loss date.\",\"answer\":\"Auto claims in Texas with Q2 2026 loss dates averaged about $6,000 per claim ($5,999.66) across 138 claims. Q2 ended three months before the extract date, so late reporting should have little effect on this figure. Some open claims may still develop, because their reserves are estimates.\",\"answer_sql\":\"SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'\",\"findings\":[{\"claim\":\"Average incurred cost per auto claim in Texas, Q2 2026 losses, is about $6,000 across 138 claims.\",\"evidence_sql\":\"SELECT sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_claim_cost, count(*) AS claims FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' AND c.product='auto' AND c.state='TX'\",\"key_numbers\":[{\"label\":\"Average claim cost\",\"value\":5999.66,\"unit\":\"USD\"},{\"label\":\"Claims\",\"value\":138,\"unit\":\"claims\"}],\"confidence\":\"high\"}],\"data_quality_issues\":[{\"issue\":\"The claim_payments table has 159 duplicate rows from the reload-2026-03-14 batch, covering payments from 2026-03-02 to 2026-03-13.\",\"impact\":\"None on this answer. Those payments predate the Q2 losses, so they can't belong to the claims counted here.\"},{\"issue\":\"15 reserve amounts in the claims table are unusually large, and the largest is $178,549.\",\"impact\":\"Large reserves can pull up an average over a small set of claims. I did not exclude them.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payment rows from reload-2026-03-14\",\"reason\":\"159 payment rows were loaded twice and will overstate paid amounts for the affected claims.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

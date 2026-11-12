@@ -1,0 +1,265 @@
+{
+  "case_id": "what-top-states-by-loss-ratio-2-auto-2025",
+  "repeat": 1,
+  "question": "Which 2 states had the highest auto loss ratio in 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Auto loss ratio for 2025 by state. Loss ratio is incurred (paid plus open reserve) divided by earned premium. Claims are counted by loss date in 2025. Earned premium is the sum of the 2025 months in exposure_monthly for auto. Payments from the 2026-03-14 reload batch are excluded because they exactly duplicate earlier payment rows.",
+    "answer": "Ohio had the highest 2025 auto loss ratio at 72.3%, followed by New York at 62.3%. Georgia was third at 60.5%. Ohio's incurred losses were about $1.90M against $2.63M of earned premium. New York's were about $1.89M against $3.04M.",
+    "answer_sql": "WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred/prem,4) AS loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC LIMIT 2",
+    "findings": [
+      {
+        "claim": "OH (72.3%) and NY (62.3%) have the highest 2025 auto loss ratios. GA is third at 60.5%, and the other states are below 54%.",
+        "evidence_sql": "WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred,0) incurred, round(prem,0) earned_premium, round(incurred/prem,4) loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC",
+        "key_numbers": [
+          {
+            "label": "OH loss ratio",
+            "value": 0.7228,
+            "unit": "ratio"
+          },
+          {
+            "label": "NY loss ratio",
+            "value": 0.6228,
+            "unit": "ratio"
+          },
+          {
+            "label": "GA loss ratio",
+            "value": 0.6045,
+            "unit": "ratio"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows from the reload-2026-03-14 batch exactly duplicate existing payments.",
+        "impact": "I excluded them. Including them would overstate paid amounts for the affected claims."
+      },
+      {
+        "issue": "Reserves on open claims are estimates, and a few very large reserves exist (the largest is about $178K).",
+        "impact": "Incurred amounts for 2025 may still change. 2025 losses are mostly reported by now, so late reporting has little effect."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payments from the reload-2026-03-14 batch",
+        "reason": "159 rows duplicate nightly-loaded payments and will inflate paid amounts for anyone who doesn't filter them out."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.031142,
+  "seconds": 16.02,
+  "tool_calls": [
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred,0) incurred, round(prem,0) earned_premium, round(incurred/prem,4) loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC"
+      },
+      "source": "custom_query",
+      "sql": "WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred,0) incurred, round(prem,0) earned_premium, round(incurred/prem,4) loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC",
+      "rows": 8,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-3226dda39521",
+      "run_id": "r-e654ccac8a04",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 216,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 169,
+      "cost_usd": 0.003977,
+      "seconds": 3.5,
+      "request_id": "req_011Cg3sYYX7FwcVg3prJVFiP"
+    },
+    {
+      "session_id": "s-3226dda39521",
+      "run_id": "r-e654ccac8a04",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 482,
+      "cache_read_input_tokens": 7101,
+      "cache_creation_input_tokens": 1432,
+      "cost_usd": 0.009824,
+      "seconds": 3.74,
+      "request_id": "req_011Cg3sYorbmpc9GSrDeW6sY"
+    },
+    {
+      "session_id": "s-3226dda39521",
+      "run_id": "r-e654ccac8a04",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1381,
+      "cache_read_input_tokens": 8533,
+      "cache_creation_input_tokens": 728,
+      "cost_usd": 0.017341,
+      "seconds": 8.39,
+      "request_id": "req_011Cg3sZ66Q7vR47Uxr9MRQp"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate payments from the reload-2026-03-14 batch",
+      "reason": "159 rows duplicate nightly-loaded payments and will inflate paid amounts for anyone who doesn't filter them out."
+    }
+  ],
+  "session_id": "s-3226dda39521",
+  "run_id": "r-e654ccac8a04",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Which 2 states had the highest auto loss ratio in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQShQcKEAgSGAI4AUIIdGhpbmtpbmcSDDLONz3ekJzbevJsuxoMPOH1UeydsLZyPjNmIjBlwWpOGtm+MHoTAe23IpUh0u1JXeVEWfAGm6ST2GNf8l+InBTs0cMqc0+dn+gkX0oqoga35IqvqxJhRWFtsGP65cDmFGTXd60sV5Ir0Bpaf6zcmxFkmaj7hpUOcXTL8UdljT0k06IUPfIDNe1l1uvT1hBs1BJ7DUPH5OQOzgRM/Zf/E5/U0TAIJrTulxRvvfjxgccB2bNv+Z84XjVYTI10I2ib8T25cFthwxVuQeG3F/RRUSPxghcaNAGWexXgmTksL51KtGA0ewAsOVAx+XwCzPJNYdWEBi5AmAT4/8F1iU5u8synKspScQZ0r/3Oz4ofL9Pfa8qbuPxSK34BjTi+0pRizYfMtxFJy0MIkSJdWEuw+Gs18yf2OGyShDs/MzQMsLMlLuRk9JWQSRZsduE5yblkK0v6bfpgAuAE/pMAua/rG1/sIYdzoGzRaGC9pn+eUfn8pxw5z2742bJ/fflNLS/KNDJiME7+1j+hYoCgpwdjFJu1qY0qDz5UQI8VrSgjM+CYbkjgMMJbCKt0Oi6z01mmtTKgA5J4KJ8l1EvM7KsaLpPk4gkUquDcuuJos1l78q1pZ84Zy57x08aGVKTG9TAlrjUgT+EYO6EHhU2HpxtLonQTv/XjKyhyX7g3XuKj0sTtVwmupEAeiO8CkbFVw5u/3XsAnwuF0+I+/HKniRIO7mGzM7/CGqmxBeqrCpBy6ZmU+fK6sNpnkcEZGw1L/fqtXMT/tHWkklsnxBnuzu0BvF4oSxGbj+jGVvjItdD0sfX2F5VR9/3NZnOEYUwZWpDLbvwHu9mutA6RaARscsdj18XMv764HRvsinHBmLQNLEjYZek7gN4N5YCmEbYd71IXcXMxTQb+9RqDBY0h1N3dK20GwZWKXKxjgnYr6sXBPDklZsO9uP9Ms5izp7Q/vWkxadVhpfnYS7Gk/BuC5miUX6uN6kjlciXfBRqFLayf5Oc0L7M/i/4s8nHdiqF2HblE0HymIRQxTrPtWfEnsJzZC/UW7/+RuGbV8X2CIJutkX8iKDWCcwc823wVC2JgovfXh6o6T7unRBwhkym+qIiMj++e+AGxG9cisXbNgR0UhEOKZbv6V3ilhyW92Sw0gFzoJh7/UTiDAKSPCQJiBWDAPI9xGAE=",
+          "thinking": "I need to compute auto loss ratio by state for 2025, dividing incurred losses (paid plus reserves) by earned premium, attributing claims by their 2025 loss date. Before that, I should check for data quality issues like potential duplicate entries in claim_payments from being loaded twice.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01DaBmPqLn4b1pVnz1QA9v6s",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01HsuX4CdQQbvP9ZwUqVFWCw",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DaBmPqLn4b1pVnz1QA9v6s",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01HsuX4CdQQbvP9ZwUqVFWCw",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSiQcKEAgSGAI4AUIIdGhpbmtpbmcSDAQRRV80lDdEXLJwDBoMlSQVpvharL8SDEhqIjCsQ1BRa9EKQw7fMghyrQPM04goOHDXlAlB9it+ea9VCysEPlqYkJ/udfOeyADaaqAqpgbzx4AO3QRYjXXYwIgVnodivllKROEeFYzwllgKKILYUfXuts/qKjP05Jg+SWYBGHa47RakCHurHUnf0utotsq3I98g2wjDRxJwcQ05+uv+unpIqFBfMc6IZdwMbSykbmo7eBDHGwZOly/MikuoPuxmxuzOmlGa/NFJDjb53rWcJ1P6xKyxKlC6a/Nm19tUBix5JoZR5AR6QoHt5M4X58BspfO4zPC1oY/zTSRkAnb4hWrQvUWgr+13k4WBFi8hFjLCVPSnC1/YYFOxPfdrepRHNkZ38u9vibH5cbQDQDNYbB4okyHtcOTBAEzsHKms5SYhkCaKVYR78hFp2YMBf+YQqEJt4Suerw2XHWiWvBRLDw9JxKPx71Ssg8Cy4K5CgmiqjbtIlTfrlKsmYcPaCm2Ek43RH/YmWoxemx4VkZ+dIP9sFK5l6SYGozVW55YOCEkgNyJqTmZkPJmLynRyGw8vUPS64KsEQm2m8e2jf2noPPePuuXZlfR3KRjhxQElYgLaODWtgOzxxLpGMh2o4J0YTI7RDkYxn32kILfItG8/rGzR2GeAhKZx+9XxcTX151v7Ap8LpmkXVe9xHhh78a7tdhDveGYSmfKj9KBQ5WK9YJhRTElr8xcF2h08vB0pGWeBJYfNJFnjtv8HKd03kjceiK/y1MS+oXy6jaltYQzOwrYfisONg8+9nh9TWYEemcoF64rH60kroxvblmwFqJMVHuNZqRGtT7aC4qs0hnlV1lDxTK6e7al/z2u4Ksx8s9JzClTGfpXGLoGvgpaFMw6RyFMtPIPRSpfLfSSS+8w/eD6qdI0W5YGeSzo7uHxV7cyKrUC6tv8b/GgJRfYxISoJQvHuzK+OHowFtv3cLwmW61slv2SJWeI4hgQXcPcmVjpnKJxa3ZiumRAUomj5542bZ5pIlvxtrip/pQe6q8fgazuihI27lM576D3yQbOs42gZyfLGWcXn7ZPQfOIHLxhSs6CIcGMfz5u6gF1yCVD+TgiWCSolIdP5fExTiIOaBtoTRB1OnsrWiyZ3czTa7jTtFW9qtc9C9fA111wCpJNChYO5jE8s2xgB",
+          "thinking": "I'm checking whether the reload batch rows are exact duplicates of the nightly rows \u2014 159 duplicated rows matches 159 reload rows, confirming they should be excluded by filtering out load_batch values starting with \"reload\".\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01TdUtBGSTY6tZ4HNHe6sX6K",
+          "input": {
+            "sql": "WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred,0) incurred, round(prem,0) earned_premium, round(incurred/prem,4) loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01TdUtBGSTY6tZ4HNHe6sX6K",
+          "content": "{\"columns\": [\"state\", \"incurred\", \"earned_premium\", \"loss_ratio\"], \"rows\": [[\"OH\", 1898411.0, 2626604.0, 0.7228], [\"NY\", 1891059.0, 3036142.0, 0.6228], [\"GA\", 1457815.0, 2411515.0, 0.6045], [\"CA\", 3010796.0, 5610009.0, 0.5367], [\"TX\", 3283362.0, 6160900.0, 0.5329], [\"IL\", 1343682.0, 2904416.0, 0.4626], [\"FL\", 2219423.0, 4915535.0, 0.4515], [\"NC\", 855484.0, 2102185.0, 0.4069]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Auto loss ratio for 2025 by state. Loss ratio is incurred (paid plus open reserve) divided by earned premium. Claims are counted by loss date in 2025. Earned premium is the sum of the 2025 months in exposure_monthly for auto. Payments from the 2026-03-14 reload batch are excluded because they exactly duplicate earlier payment rows.\",\"answer\":\"Ohio had the highest 2025 auto loss ratio at 72.3%, followed by New York at 62.3%. Georgia was third at 60.5%. Ohio's incurred losses were about $1.90M against $2.63M of earned premium. New York's were about $1.89M against $3.04M.\",\"answer_sql\":\"WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred/prem,4) AS loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC LIMIT 2\",\"findings\":[{\"claim\":\"OH (72.3%) and NY (62.3%) have the highest 2025 auto loss ratios. GA is third at 60.5%, and the other states are below 54%.\",\"evidence_sql\":\"WITH paid AS (SELECT claim_id, sum(amount) p FROM claim_payments WHERE load_batch LIKE 'nightly-%' GROUP BY 1), inc AS (SELECT c.state, sum(coalesce(p.p,0)+c.reserve_amount) incurred FROM claims c LEFT JOIN paid p USING(claim_id) WHERE c.product='auto' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), ep AS (SELECT state, sum(earned_premium) prem FROM exposure_monthly WHERE product='auto' AND month BETWEEN '2025-01-01' AND '2025-12-01' GROUP BY 1) SELECT inc.state, round(incurred,0) incurred, round(prem,0) earned_premium, round(incurred/prem,4) loss_ratio FROM inc JOIN ep USING(state) ORDER BY loss_ratio DESC\",\"key_numbers\":[{\"label\":\"OH loss ratio\",\"value\":0.7228,\"unit\":\"ratio\"},{\"label\":\"NY loss ratio\",\"value\":0.6228,\"unit\":\"ratio\"},{\"label\":\"GA loss ratio\",\"value\":0.6045,\"unit\":\"ratio\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows from the reload-2026-03-14 batch exactly duplicate existing payments.\",\"impact\":\"I excluded them. Including them would overstate paid amounts for the affected claims.\"},{\"issue\":\"Reserves on open claims are estimates, and a few very large reserves exist (the largest is about $178K).\",\"impact\":\"Incurred amounts for 2025 may still change. 2025 losses are mostly reported by now, so late reporting has little effect.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payments from the reload-2026-03-14 batch\",\"reason\":\"159 rows duplicate nightly-loaded payments and will inflate paid amounts for anyone who doesn't filter them out.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

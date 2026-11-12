@@ -1,0 +1,326 @@
+{
+  "case_id": "what-average-claim-cost-by-product-2026-q2",
+  "question": "What was the average claim cost by product in Q2 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost is incurred (paid plus open reserve) divided by claim count, using the agreed metric. I counted claims by loss date from 2026-04-01 to 2026-06-30 (Q2 2026) and split them by product.",
+    "answer": "For Q2 2026, home claims averaged about $14,152 and auto claims about $6,269. Home claims therefore cost roughly 2.3 times as much as auto claims. Q2 is fully past, but late-reported claims, mostly bodily injury and liability, may still raise these averages a little, especially for June losses.",
+    "answer_sql": "WITH source AS (SELECT c.*, coalesce(pay.paid, 0) + c.reserve_amount AS incurred FROM claims c JOIN policies p USING (policy_id) LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred) / count(*) AS average_claim_cost FROM source WHERE loss_date >= DATE '2026-04-01' AND loss_date <= DATE '2026-06-30' GROUP BY product ORDER BY product",
+    "findings": [
+      {
+        "claim": "Q2 2026 average claim cost by loss date: auto $6,269, home $14,152.",
+        "evidence_sql": "SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_cost FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY c.product",
+        "key_numbers": [
+          {
+            "label": "Auto average claim cost",
+            "value": 6268.63,
+            "unit": "USD"
+          },
+          {
+            "label": "Home average claim cost",
+            "value": 14151.96,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "claim_payments contains 159 duplicate rows from the out-of-batch load reload-2026-03-14, covering payments dated 2026-03-02 to 2026-03-13.",
+        "impact": "None on this answer. No reloaded payments belong to claims with loss dates in Q2 2026."
+      },
+      {
+        "issue": "Late reporting of claims.",
+        "impact": "Claims from late Q2, particularly bodily injury and liability, may still be reported, so these averages could change slightly."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payments from reload-2026-03-14",
+        "reason": "159 duplicate payment rows inflate paid amounts for March 2026 payments."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.026838,
+  "seconds": 15.24,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [
+          "product"
+        ],
+        "filters": [],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT product, sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2026-04-01'\n  AND loss_date <= DATE '2026-06-30'\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) FROM claim_payments p JOIN claims c USING (claim_id) WHERE p.load_batch LIKE 'reload%' AND c.loss_date >= DATE '2026-04-01'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) FROM claim_payments p JOIN claims c USING (claim_id) WHERE p.load_batch LIKE 'reload%' AND c.loss_date >= DATE '2026-04-01'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-6b8662c2291a",
+      "run_id": "r-79e4eea67b89",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 230,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 168,
+      "cost_usd": 0.004307,
+      "seconds": 2.55,
+      "request_id": "req_011Cg25suHw7d61dQHUVFwmG"
+    },
+    {
+      "session_id": "s-6b8662c2291a",
+      "run_id": "r-79e4eea67b89",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 86,
+      "cache_read_input_tokens": 8063,
+      "cache_creation_input_tokens": 853,
+      "cost_usd": 0.004609,
+      "seconds": 2.4,
+      "request_id": "req_011Cg25t6EFeHRKGTJnrD3FS"
+    },
+    {
+      "session_id": "s-6b8662c2291a",
+      "run_id": "r-79e4eea67b89",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 218,
+      "cache_read_input_tokens": 8916,
+      "cache_creation_input_tokens": 666,
+      "cost_usd": 0.005632,
+      "seconds": 2.83,
+      "request_id": "req_011Cg25tGjHDVQup2XwuAY5A"
+    },
+    {
+      "session_id": "s-6b8662c2291a",
+      "run_id": "r-79e4eea67b89",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 974,
+      "cache_read_input_tokens": 9582,
+      "cache_creation_input_tokens": 252,
+      "cost_usd": 0.01229,
+      "seconds": 7.11,
+      "request_id": "req_011Cg25tV3whZMq4D6BZGkgs"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate payments from reload-2026-03-14",
+      "reason": "159 duplicate payment rows inflate paid amounts for March 2026 payments."
+    }
+  ],
+  "session_id": "s-6b8662c2291a",
+  "run_id": "r-79e4eea67b89",
+  "numbers": {
+    "checked": 2,
+    "confirmed": 2,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost by product in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VPJ1gjwnEJYgXUU9ap7aUA",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [
+              "product"
+            ],
+            "filters": [],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01XTM2qBPZP3f2gcaRTGprp6",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VPJ1gjwnEJYgXUU9ap7aUA",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"USD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT product, sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2026-04-01'\\n  AND loss_date <= DATE '2026-06-30'\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"product\", \"value\"], \"rows\": [[\"auto\", 6268.625147744946], [\"home\", 14151.956160520607]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01XTM2qBPZP3f2gcaRTGprp6",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQStQUKEAgSGAI4AUIIdGhpbmtpbmcSDNZ1gRZ22nvnVGUmohoMWVOllyRRdbepv22BIjB1ouDqJMeKwpeIRJgnurVvScpqF+4aOGPSPdEgCpHMOlF4sZFatTrpVA/Gsu3ezBsq0gQcvIv4BjIzw3JPyZvB7tdUAzFR11RGAWZqY8Wvw+aaHR/5A8sD/Y79HntljXfgdXwu3UsORMb/gjjYToic7UV8QohKvPodMVSdnGjzjeJTsBNvLRvOuJUuL7JZ5AX4rgQrxeY1dI6QerN4zAuwFPU9iXj+jcJ7QKfu+E4/o3wxA4dklmmTYTo1sf2qDHN1zqEHfxmRyVmAmcuRpu1iTJJvsJk0heEly9DDO4+isV3hGhU5F7xLHTPyouSOzeD/Qn6IGLfHHzYxCmtAmL3aY+bCva3o8+Ds0uRz/DTcYwPOljDpYqU66/G+qqfXo28fuWLjDRY2PPpHQoSWFpUY7KqUjXaFcMBp3VUJ+DiQj9H4/frHoy3gnCPdQAC/BX4knt9xOvxmlHFQxPaLmBvuGS6XRsO68NMRJ7K8S4bxlz5UrS2WWWrOKtjCHLzHGxDqgrbABatjepd3ua18DVhdrJKbcJl/iol6NAboe21eQSFwIWYwbapsTUITyAYIi0nZCfb5jASVqI+pAFLGWcgSmlNI4/KrKNQ2+14AUWXjI5SBD52/gKWCoD8TjD8RM3LqJSu9S3yh8LKowouS9+ywf9fXogYU93D7Affz2HxjV+g4vV6g3bt8iUYwmcsuSB8S1eC9oQzeudcsautk7FQS3cm0GhfgccctjR5S44lOe0eQUZEtozq2JZMgUxjY/ZdtftJK3fVE+bfjZ3KRithNmG3+lCBfn7dPAS6EvWupFH6mlVpJsX/Q6XGefK8mbLpFGUgUFoZn3LSVdXfKPRCwfXL5ajMYAQ==",
+          "thinking": "I should check the data quality for payments loaded outside the nightly batch, since those could contain duplicates. Let me run a quick check on that.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_012uyojkAJhjY1bwGScTbTg8",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012uyojkAJhjY1bwGScTbTg8",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSpAcKEAgSGAI4AUIIdGhpbmtpbmcSDGjJiPk8goQBWiJPUxoMBF9uDcjJdTcvRnCpIjBmDUQba6UHka62D1FSlgcbRmXkuxoqhtjIxnYHdBuZy8ceE4nuJjA62yCpk+mCJmIqwQa7+D8WzcjKnP8fdotyG5rYmDpmDxXCcQBh3VMTxpurkBXH/yQf8QMpi/LJDunu2arKxrDP+tLIDQvq6oi09u2zy0hx2+kkSsntUphZ9VK5NmMncb1Z+Dn+M4sMNa4zxDjxzNeO5kF8GYADV3zFVQ7tm49Ymu/KpGSkhN1e2Ujrukb1EFjZpvXMcGm+Futtbfb7DAn6UVBEcY31G6gZAoTB9IWF9iw4CPCdcXYDzUu+k82yKjHdIM1xUa1aaTiXNYCdyfUKjRNnGu1f5ccLY4O/1JVDdQHinoa+a5jx3ArjbXakLqkSG3SWSU45nN7eYaEsidCdMh3T9S1n85NLW9Gdg960hHQRIxjckMRqchCCVab+ObST1I4CkVlm6Q1spc20DIB5f8NJ+Yt/9wEl+Qd0XDBL8iAIsFqC0YVvXSvmq6hKJyDX/ztTEeQ9RyHY/KwuUIltyKXk4+3dGs7zpJGpjCuWK464tjNrA+dLsZNx0apVruex5ozHPBiF2SwCJ2RIyKv65qv3ICEGbTbErczs1faTiJ7cYsI2picOpbZd0SD1CRFfg2u6FfO4oIvjmKZ8Q/RTPeHFqdkHAi0haXkvZCrDrARBSJzE0OqgeRGRAirQaGHetsyVzYShVE7gr53GKLxiEHZx6eX04Y5pYnIEyMSdQ9yMPWfxDDMEwj+PAMbGaPRQlTK85Ev5/Ahx5Rby0sojIhQOrHPpK06JlpdohnYLq1AlzSsH0rLRjGq/8VNZOtLH7yB9FmRSYLpfzM7QDKMZs2Fuw8KEtrp7UdOqnrUyMo3dU9hU0RRJBVpNMMRFlYXdhpLhXsxJd3jVMG88M4EQAMrwiQGFP05F6UhtTjPzW5OgSqaOJrbIdbWp77OnhgJw8R6YY9KKIAc/HQk17QTFA3FwaoC/L2kZY5Rl98Aaxl40Dur+Lvv6Y9OR3OIqP/cFhChuEozkBLoy4XT/fuU7RHRnSfvLOEmYvp73f0hGQiJqBdJTjq7dZf1LaaLXBT32igDVNmq/x5cy56tVKeDwu9WNELlByDrItP1U29r0RXko9knqHgKPYVWmFZoO4Fj/2fz+er0VO+8fvU6eH5FWz+zwY9RH/CpwMveh2BgB",
+          "thinking": "I'm checking whether the March reload duplicates could affect Q2 loss-date claims, but since payments occurred before the Q2 loss dates, that's logically impossible, so Q2 is unaffected. Q2 claims are fairly recent, though some June losses were reported late.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_0168KP57xjkGa7whNW9SfewL",
+          "input": {
+            "sql": "SELECT count(*) FROM claim_payments p JOIN claims c USING (claim_id) WHERE p.load_batch LIKE 'reload%' AND c.loss_date >= DATE '2026-04-01'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0168KP57xjkGa7whNW9SfewL",
+          "content": "{\"columns\": [\"count_star()\"], \"rows\": [[0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost is incurred (paid plus open reserve) divided by claim count, using the agreed metric. I counted claims by loss date from 2026-04-01 to 2026-06-30 (Q2 2026) and split them by product.\",\"answer\":\"For Q2 2026, home claims averaged about $14,152 and auto claims about $6,269. Home claims therefore cost roughly 2.3 times as much as auto claims. Q2 is fully past, but late-reported claims, mostly bodily injury and liability, may still raise these averages a little, especially for June losses.\",\"answer_sql\":\"WITH source AS (SELECT c.*, coalesce(pay.paid, 0) + c.reserve_amount AS incurred FROM claims c JOIN policies p USING (policy_id) LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred) / count(*) AS average_claim_cost FROM source WHERE loss_date >= DATE '2026-04-01' AND loss_date <= DATE '2026-06-30' GROUP BY product ORDER BY product\",\"findings\":[{\"claim\":\"Q2 2026 average claim cost by loss date: auto $6,269, home $14,152.\",\"evidence_sql\":\"SELECT c.product, sum(coalesce(pay.paid,0)+c.reserve_amount)/count(*) AS avg_cost FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY c.product\",\"key_numbers\":[{\"label\":\"Auto average claim cost\",\"value\":6268.63,\"unit\":\"USD\"},{\"label\":\"Home average claim cost\",\"value\":14151.96,\"unit\":\"USD\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"claim_payments contains 159 duplicate rows from the out-of-batch load reload-2026-03-14, covering payments dated 2026-03-02 to 2026-03-13.\",\"impact\":\"None on this answer. No reloaded payments belong to claims with loss dates in Q2 2026.\"},{\"issue\":\"Late reporting of claims.\",\"impact\":\"Claims from late Q2, particularly bodily injury and liability, may still be reported, so these averages could change slightly.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payments from reload-2026-03-14\",\"reason\":\"159 duplicate payment rows inflate paid amounts for March 2026 payments.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

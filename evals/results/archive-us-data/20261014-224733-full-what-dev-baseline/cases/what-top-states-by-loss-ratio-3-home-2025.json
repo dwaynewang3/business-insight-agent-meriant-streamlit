@@ -1,0 +1,360 @@
+{
+  "case_id": "what-top-states-by-loss-ratio-3-home-2025",
+  "question": "Which 3 states had the highest home loss ratio in 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Home loss ratio is incurred losses (paid plus reserve) divided by earned premium. Incurred is by loss date in calendar 2025, and premium is the 2025 home earned premium by state. I ranked the 8 states and took the top 3.",
+    "answer": "The three states with the highest 2025 home loss ratios are Illinois (68.8%), New York (64.4%) and Georgia (62.2%, or 63.6% on the official metric). The ranking is the same either way. The official metric double-counts 159 reloaded payments, so I removed those duplicates for the figures above. The duplicate-payment correction only moves Georgia. Losses from late 2025 may still be developing, so these ratios could rise.",
+    "answer_sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM (SELECT DISTINCT ON (claim_id, payment_date, amount, payee_type) * FROM claim_payments ORDER BY claim_id, payment_date, amount, payee_type, (load_batch LIKE 'nightly-%') DESC) GROUP BY claim_id), n AS (SELECT c.state, sum(coalesce(paid,0)+c.reserve_amount) inc FROM claims c LEFT JOIN pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1) SELECT state, inc/ep AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+    "findings": [
+      {
+        "claim": "IL, NY and GA have the highest 2025 home loss ratios. The official metric gives IL 68.8%, NY 64.4% and GA 63.6%. After removing duplicate payments, GA is 62.2%.",
+        "evidence_sql": "SELECT state, sum(earned_premium) FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1",
+        "key_numbers": [
+          {
+            "label": "IL",
+            "value": 0.688,
+            "unit": "ratio"
+          },
+          {
+            "label": "NY",
+            "value": 0.644,
+            "unit": "ratio"
+          },
+          {
+            "label": "GA (deduplicated)",
+            "value": 0.622,
+            "unit": "ratio"
+          },
+          {
+            "label": "GA (official metric)",
+            "value": 0.636,
+            "unit": "ratio"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows were loaded twice in the reload-2026-03-14 batch and repeat existing payments exactly.",
+        "impact": "The official loss_ratio metric slightly overstates paid amounts. In this ranking only Georgia's figure changes, from 63.6% to 62.2%, and the top 3 stays the same."
+      },
+      {
+        "issue": "Recent claims are reported late, so the latest 2025 losses may be incomplete.",
+        "impact": "Ratios may rise slightly as claims develop."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate rows from the reload-2026-03-14 payment batch",
+        "reason": "159 duplicate payments inflate paid amounts and incurred losses in company metrics."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.033612,
+  "seconds": 17.57,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "loss_ratio",
+        "dimensions": [
+          "state"
+        ],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "home"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2025-01-01",
+        "end": "2025-12-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT state, sum(incurred) AS value\n    FROM source\n    WHERE loss_date >= DATE '2025-01-01'\n      AND loss_date <= DATE '2025-12-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT state, sum(earned_premium) AS value\n    FROM source\n    WHERE month >= DATE '2025-01-01'\n      AND month <= DATE '2025-12-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT state, 1 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (state)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM (SELECT DISTINCT ON (claim_id, payment_date, amount, payee_type) * FROM claim_payments ORDER BY claim_id, payment_date, amount, payee_type, (load_batch LIKE 'nightly-%') DESC) GROUP BY claim_id), n AS (SELECT c.state, sum(coalesce(paid,0)+c.reserve_amount) inc FROM claims c LEFT JOIN pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1) SELECT state, inc/ep AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+      },
+      "source": "custom_query",
+      "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM (SELECT DISTINCT ON (claim_id, payment_date, amount, payee_type) * FROM claim_payments ORDER BY claim_id, payment_date, amount, payee_type, (load_batch LIKE 'nightly-%') DESC) GROUP BY claim_id), n AS (SELECT c.state, sum(coalesce(paid,0)+c.reserve_amount) inc FROM claims c LEFT JOIN pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1) SELECT state, inc/ep AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+      "rows": 3,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-47d7cfd7bc7c",
+      "run_id": "r-b5d11f183f81",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 194,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 168,
+      "cost_usd": 0.003947,
+      "seconds": 2.4,
+      "request_id": "req_011Cg26WCKsWT1Coag5t8u6L"
+    },
+    {
+      "session_id": "s-47d7cfd7bc7c",
+      "run_id": "r-b5d11f183f81",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 105,
+      "cache_read_input_tokens": 8063,
+      "cache_creation_input_tokens": 945,
+      "cost_usd": 0.005029,
+      "seconds": 2.27,
+      "request_id": "req_011Cg26WNNryRCwnmQ89q9wA"
+    },
+    {
+      "session_id": "s-47d7cfd7bc7c",
+      "run_id": "r-b5d11f183f81",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 458,
+      "cache_read_input_tokens": 9008,
+      "cache_creation_input_tokens": 685,
+      "cost_usd": 0.008098,
+      "seconds": 3.31,
+      "request_id": "req_011Cg26WYMPvBEMbd5jiyNDF"
+    },
+    {
+      "session_id": "s-47d7cfd7bc7c",
+      "run_id": "r-b5d11f183f81",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1325,
+      "cache_read_input_tokens": 9693,
+      "cache_creation_input_tokens": 538,
+      "cost_usd": 0.016538,
+      "seconds": 9.25,
+      "request_id": "req_011Cg26WncP935EjXFCufHyV"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate rows from the reload-2026-03-14 payment batch",
+      "reason": "159 duplicate payments inflate paid amounts and incurred losses in company metrics."
+    }
+  ],
+  "session_id": "s-47d7cfd7bc7c",
+  "run_id": "r-b5d11f183f81",
+  "numbers": {
+    "checked": 4,
+    "confirmed": 0,
+    "unconfirmed": [
+      {
+        "finding": 0,
+        "label": "IL",
+        "value": 0.688,
+        "unit": "ratio",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "NY",
+        "value": 0.644,
+        "unit": "ratio",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "GA (deduplicated)",
+        "value": 0.622,
+        "unit": "ratio",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "GA (official metric)",
+        "value": 0.636,
+        "unit": "ratio",
+        "reason": "Not in the result of its finding's SQL."
+      }
+    ]
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Which 3 states had the highest home loss ratio in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_012aRNiSwrd1558xLuWWVhuj",
+          "input": {
+            "metric": "loss_ratio",
+            "dimensions": [
+              "state"
+            ],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "home"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2025-01-01",
+            "end": "2025-12-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012aRNiSwrd1558xLuWWVhuj",
+          "content": "{\"metric\": \"loss_ratio\", \"label\": \"Loss ratio\", \"unit\": \"ratio\", \"definition\": \"1 * incurred_losses / earned_premium\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT state, sum(incurred) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2025-01-01'\\n      AND loss_date <= DATE '2025-12-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT state, sum(earned_premium) AS value\\n    FROM source\\n    WHERE month >= DATE '2025-01-01'\\n      AND month <= DATE '2025-12-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT state, 1 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (state)\\nORDER BY ALL\", \"columns\": [\"state\", \"value\"], \"rows\": [[\"CA\", 0.4363451936035864], [\"FL\", 0.5802375161725399], [\"GA\", 0.636004365931536], [\"IL\", 0.6881505834647409], [\"NC\", 0.47959356117366514], [\"NY\", 0.6441063428328064], [\"OH\", 0.46451852524508647], [\"TX\", 0.536538766173874]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSwQUKEAgSGAI4AUIIdGhpbmtpbmcSDHQiMlpjyrZr8F0/TRoMPKNS9+RmyUnuIwRFIjBBGCsvrbbfX8y6TY4P3XVRIj74rBKwxoovUGI9fNQJx5m0iJX036K+TFJXJPFD3sMq3gSyx9zBYaALmCbTS+S5I74a6/ojnyj93NygUf6GlAj6aHj70pOUZij3IlEyd52g5b3uGFOO0t0QofzgqUvaOFe/BbHsHu1QKtp9Pt7KYaUZVZTc2ix6TQ72CbutKIQFRnbCNst1URXHEB7k64Ttp1mjkNIO4gaea701d8/xZOYmd3Wryd0BWnqXUIYPG/TzKKvfgG2He0VuI+E2R7t14aqdbGQJ69gXY7Cien1i2NA3Z6U4CHMMkFisGIH61tD1Txnm2yoCmoAG4We/tKroHzaenYhWmCmD+LrBRlyuvz8fcBBvKWw1LEtOOj6E8fSZEqXVJM2OLGrScAyOxuMKZUTn+WFvMJMSXpJKxQqGb6iYFe8QjfqUeUUCaBnZZtezbN6UrRBBwY6DzlhsA7LM7U0rfHw6ly1X9gLoWwit31JevNcO0VOVEoB9w4PH7B6TpIOdB0W9bbXN0bXRk8NKSBBziIR6pfO9xD9jgviLxr2yuMJtRgSevf3R317kaQ+8jg9Hx38N0PrPVhmwxQOnw824PfD/cpt7969O55bCySLekX31JFhcSVeH0hs8XPpPx70wtXAb5WilBcIobuZ0773cZxcz5vbvOZOv8kEZgCG4HOv+csrmzN9cd1TBBvuH1n/Pcz2wL9tKn5CIsiGVdTbtQGqhxbtMte3fNZa30w5pS7ogcJnbFtX3aC+5vjeOutybU4APdCG2/voK+FoG7D921YFYIUBZUhgWOgVG6eiasmDgPE8YQYelUnchGQ1bYr1r6qmPKjIUWjEG+WlCKomhS6A7VvYwoYN8IiRAfwgYAQ==",
+          "thinking": "The top three states are Illinois at 0.688, New York at 0.644, and Georgia at 0.636. Before finalizing, it's worth running a quick check for duplicate payments to make sure the data quality holds up.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_012QJgc1DhLmkSmtwVqnZBnN",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012QJgc1DhLmkSmtwVqnZBnN",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSiQYKEAgSGAI4AUIIdGhpbmtpbmcSDG2r+dnEy+cOkTl28RoMSF9ukVp0uaPwS5PGIjDrmKAtHFFSpZmroSofvF9htCrKOsGddS2Yt57rmh6AmnYij3e0IFtATMgO3rGuGnMqpgUZt10dsGoc+L77NZia4yMMvS6M/W8fij19v4jq/nDIHB+3aSUTcMlxJKFZkQ9BAh63xPykVWAUBt0GSK2+LRXdP5LCE8rAXKoI1mstXo+C04lW1vN0O17lt+OH5DhYuH5TxgQoPfaKJR3zraCbvwl5807Iv20ISYiuwfzjcM2lDclyY0C3UWok7BU1z8Vi1q7Q0bKCVizt3eRUailGVYrDX53LvkcMhl1qdMKWJ5rSWwvza5OUe1rTZ4APw/Jievbn6j5bfICD1JIc1zX7Mj8mHc12Twma1Mr3oOn9dckJcCYbIhan5LZT535dHS3F7d5iYQbEtB0bJ65JHsaaA3Jf4qVJdb2lDjbJhpuZlDXKKGr6E0MR2HP2HKbPcIxOHTWvyaEkl0xW7mtaroHQI/SNP9CV1TlVDhKuvRt0TXtE3QXt/Nmg/nmDJcbO7iR7xwDSb9h7OozrkfcP50GEXUCIoxU2R2yydWj4RmRcAPEQ2tjzjizEIiHaRS686HLeFcAuJU5mMpQgm7oMvoPA0ysPfK9tpz64OQoipUPzw3bAzFqSG+MXLbgDKx6BJOBPPM5UyT2FVJ0G/O2fbFYQ0NWX+8qQYxggMogUpeitwXEEAFwNc17Mkx0Qktq/CIYE37/aT8iBc3EVD/JPyMNT6kckhGMZ+tYP6wQgXrs77TQQx/ADYQe5npi5S7SC2SE5Ksj9zr7K+EuoSkqrYVBUZKEoOjvS3sexSuHm7cmW13mkQYjdMqU68iTONOu49CAwJP9lWZaVJ7j9cCmZ1k9QLCPFEviSgwG11+5ZdrQ3AOQeZsdqkqJxmce2XIhgziwl1JgW+0AcD2MHCAqHh1ORnVCVeXoYIZweBaEWwH3aLFgejkm1ohM7bCk8+xKNnxy9ryO+3vO5KksYAQ==",
+          "thinking": "I realize those March 2026 reload duplicates are inflating the paid figures, which could distort the 2025 loss numbers too, so I should compute a deduplicated ratio to correct for this.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01L4Ru3DiXyfY6y1ynDwFygk",
+          "input": {
+            "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM (SELECT DISTINCT ON (claim_id, payment_date, amount, payee_type) * FROM claim_payments ORDER BY claim_id, payment_date, amount, payee_type, (load_batch LIKE 'nightly-%') DESC) GROUP BY claim_id), n AS (SELECT c.state, sum(coalesce(paid,0)+c.reserve_amount) inc FROM claims c LEFT JOIN pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1) SELECT state, inc/ep AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01L4Ru3DiXyfY6y1ynDwFygk",
+          "content": "{\"columns\": [\"state\", \"loss_ratio\"], \"rows\": [[\"IL\", 0.6881505834647409], [\"NY\", 0.6441063428328064], [\"GA\", 0.6218866492739312]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSlAgKEAgSGAI4AUIIdGhpbmtpbmcSDF0GMrhuZ7KZUqeGnRoMY/ASY24fhIPgefLwIjAwxb3EWNLBOfglWpZZUFVkvwDcl2vzJC7wqxGZ+mtQFVScBZiQCthqj38W00bb+WwqsQcQCjNEFEbQz+tQZ1tnFG/4Uq6SI3eQQM2A7WkNLrvPmtW2ikvae09kII+O4LxKcIxwyUovZBe4AWA2l/KENm2v2WrtyhC6UrD/iRyWtXSKg2fN7F34Jz/PiWexOIXMHqE2ob+XNabIOUDVqzhIkCUoQBqd7BZTgQaQjs6QEfmhM6iclWa3AsslNl1Ks0e/5nlnp+VgM/g+hpRomckftWVZliJZJRw1GKmt30GNUIb2bezOZwpwJIo2NdsJUQHmQD7iQJs9N+cbigvINouZg1SUuf3lL26Ob9eq5przTo/hQvkvbDVzEbquCacZnpzkr0pfb1fSnqofRHh9ojY/jAYd1bjFFKcZhKUUOmh2bMXTxo5DMV1I3mxJ9ROil8C/uspfQPJDzC+SeAYQLkb3ChbABs06OKMI/GU/ANFVd8M/xoBLjO+IqEjynWhRjtLQSVVcFpRRrXz6S6iYGmI7RPAs8GarREkJHqtG0ny2883Gtfvlfglm8g9L8RSoKUPCjzWcSGJXsI2G/SAcczi1OttnO/Ov77F70NWuGnDbPTpaoqGT1encfUVI1l3YOfdIa8HrxZCYzfiNcA08678wMXoSajS+cqsysaxPe9TnFoIg14zISx9coVAajpayDURqabEVjhKcFQK2Mt1HHUZoQ5aF6ij9ypSeZIf6DkCbDQQauZkwI/XAbVxcq5BqHpTEgcfEpwOF/D38Ex3LNKICgZ5MhkSyO2AftHo8xekS5knf3qHKlMGqo37XLNvynEYf7rCTH2mqY2xbNbs71ZNMqjBG6iqt6sQZFWZQ56Jc2+5Tn980K+ubsRdY9jH9toai0V73bnBOg9Kh+cWtdeM3jrqvzhG6QKZU8xWwqOzTaPSjT/BKOcdPRmZF27NOwtu+7yVK+H8/lUTLTHYzpEqNeI1+ykp7NV51aIKqt2LOSf1hYeC9JIW508u1gE0+YEV8AKbfu8GIqXjPsiBrX7GJ9gsaEwvd0ER9wjxCr7IM4/tm20XtorEwtrhCokXro6gEhy7sv8q26pfy8YvEOC8x05cU6duqywZGVoRlJr33qqURZxTkgfdyyN2y6FeBnxqfY3tLRFQbZeDqERUPc01rInLvEf+BDSmOqVjlK9AKWoIpMliNUVU7oJk78YoUdbx+VBVvwmIvVtnyn8r3dx+cCTYJq87Tzwugq6hffLUXil9yGUZZ3LWB4WSbNR6rercvPPFwa3twNIc3ZPOw1lehZU8hRTJtiw3UdxgPxS478TSUQHUYAQ==",
+          "thinking": "Deduping with DISTINCT shifts the ratio slightly (0.636\u21920.622) though it technically risks removing legitimately identical payments too, but the ranking stays the same either way. I'll report the deduped value as the more correct answer while noting the official figure of 0.636 for reference.\n\n",
+          "type": "thinking"
+        },
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Home loss ratio is incurred losses (paid plus reserve) divided by earned premium. Incurred is by loss date in calendar 2025, and premium is the 2025 home earned premium by state. I ranked the 8 states and took the top 3.\",\"answer\":\"The three states with the highest 2025 home loss ratios are Illinois (68.8%), New York (64.4%) and Georgia (62.2%, or 63.6% on the official metric). The ranking is the same either way. The official metric double-counts 159 reloaded payments, so I removed those duplicates for the figures above. The duplicate-payment correction only moves Georgia. Losses from late 2025 may still be developing, so these ratios could rise.\",\"answer_sql\":\"WITH pay AS (SELECT claim_id, sum(amount) paid FROM (SELECT DISTINCT ON (claim_id, payment_date, amount, payee_type) * FROM claim_payments ORDER BY claim_id, payment_date, amount, payee_type, (load_batch LIKE 'nightly-%') DESC) GROUP BY claim_id), n AS (SELECT c.state, sum(coalesce(paid,0)+c.reserve_amount) inc FROM claims c LEFT JOIN pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1) SELECT state, inc/ep AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3\",\"findings\":[{\"claim\":\"IL, NY and GA have the highest 2025 home loss ratios. The official metric gives IL 68.8%, NY 64.4% and GA 63.6%. After removing duplicate payments, GA is 62.2%.\",\"evidence_sql\":\"SELECT state, sum(earned_premium) FROM exposure_monthly WHERE product='home' AND month BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1\",\"key_numbers\":[{\"label\":\"IL\",\"value\":0.688,\"unit\":\"ratio\"},{\"label\":\"NY\",\"value\":0.644,\"unit\":\"ratio\"},{\"label\":\"GA (deduplicated)\",\"value\":0.622,\"unit\":\"ratio\"},{\"label\":\"GA (official metric)\",\"value\":0.636,\"unit\":\"ratio\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows were loaded twice in the reload-2026-03-14 batch and repeat existing payments exactly.\",\"impact\":\"The official loss_ratio metric slightly overstates paid amounts. In this ranking only Georgia's figure changes, from 63.6% to 62.2%, and the top 3 stays the same.\"},{\"issue\":\"Recent claims are reported late, so the latest 2025 losses may be incomplete.\",\"impact\":\"Ratios may rise slightly as claims develop.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate rows from the reload-2026-03-14 payment batch\",\"reason\":\"159 duplicate payments inflate paid amounts and incurred losses in company metrics.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

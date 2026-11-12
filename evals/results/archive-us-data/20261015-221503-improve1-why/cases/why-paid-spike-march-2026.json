@@ -1,0 +1,440 @@
+{
+  "case_id": "why-paid-spike-march-2026",
+  "repeat": 1,
+  "question": "Why did paid claims spike in early March 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Paid claims means the paid_amount metric, which is the sum of claim_payments.amount by payment date. I compared weekly totals for early March 2026 (weeks starting 2026-03-02 and 2026-03-09) with the weeks before and after.",
+    "answer": "The spike was mostly a data problem. Weekly paid amounts jumped from about $535K (week of 2/23) to $882K (week of 3/2) and $1.00M (week of 3/9). A non-nightly load, 'reload-2026-03-14', added 159 payment rows dated 2026-03-02 to 03-13. Every one of them exactly duplicates a payment already loaded by a nightly batch, so they are double-counted. They total $892,999 across 139 claims: $441K in week 3/2 and $452K in week 3/9. Without them, those weeks are about $441K and $549K, which is in line with or below nearby weeks. No weather event started in Feb\u2013mid-Mar 2026 that could explain a real surge. Reported paid figures for early March are overstated by about $893K until the duplicates are removed.",
+    "answer_sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) AS week, sum(amount) AS reported_paid, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') AS paid_excluding_reload FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "The reload batch's rows account for about half of paid amount in the weeks of 3/2 and 3/9.",
+        "evidence_sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) wk, sum(amount) total, sum(amount) FILTER (WHERE load_batch LIKE 'reload-%') reload_amt, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') excl_reload FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1",
+        "key_numbers": [
+          {
+            "label": "Week 3/2 reported",
+            "value": 882403.6,
+            "unit": "USD"
+          },
+          {
+            "label": "Week 3/2 reload portion",
+            "value": 441201.8,
+            "unit": "USD"
+          },
+          {
+            "label": "Week 3/9 reported",
+            "value": 1001251.19,
+            "unit": "USD"
+          },
+          {
+            "label": "Week 3/9 reload portion",
+            "value": 451796.95,
+            "unit": "USD"
+          },
+          {
+            "label": "Week 3/9 excluding reload",
+            "value": 549454.24,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "All 159 reload rows duplicate payments already loaded by nightly batches (same claim, date, amount and payee type).",
+        "evidence_sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type)) AS matched_rows FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'",
+        "key_numbers": [
+          {
+            "label": "Reload rows",
+            "value": 159,
+            "unit": "rows"
+          },
+          {
+            "label": "Rows matching a nightly row",
+            "value": 159,
+            "unit": "rows"
+          },
+          {
+            "label": "Duplicated amount",
+            "value": 892998.75,
+            "unit": "USD"
+          },
+          {
+            "label": "Claims affected",
+            "value": 139,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Data problem: payments loaded twice",
+        "verdict": "supported",
+        "evidence": "The reload-2026-03-14 batch duplicates 159 nightly-loaded payments totalling $893K, which is almost the entire excess over normal weekly levels."
+      },
+      {
+        "hypothesis": "External event (weather)",
+        "verdict": "ruled_out",
+        "evidence": "weather_events has no events starting between 2026-02-01 and 2026-03-15."
+      },
+      {
+        "hypothesis": "Real operational or normal variation",
+        "verdict": "ruled_out",
+        "evidence": "Excluding the reload rows, the weeks of 3/2 and 3/9 are about $441K and $549K, within or below the Feb range of $489K\u2013$642K."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows from load batch reload-2026-03-14 exactly duplicate rows from nightly batches (payments dated 2026-03-02 to 2026-03-13).",
+        "impact": "Paid amount is overstated by $892,999 in early March 2026. Incurred losses and loss ratio are also inflated for the affected claims."
+      }
+    ],
+    "charts": [
+      {
+        "title": "Weekly paid amount: reported vs excluding reload batch",
+        "sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) AS week, sum(amount) AS reported_paid, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') AS paid_excluding_reload FROM claim_payments WHERE payment_date BETWEEN '2026-01-26' AND '2026-04-12' GROUP BY 1 ORDER BY 1",
+        "type": "line",
+        "x": "week",
+        "y": "reported_paid"
+      }
+    ],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate rows from reload-2026-03-14 in claim_payments",
+        "reason": "159 rows ($893K) duplicate nightly-loaded payments and overstate paid and incurred amounts. Data engineering should confirm the cause and fix it."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.045767,
+  "seconds": 22.71,
+  "tool_calls": [
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "paid_amount",
+        "dimensions": [],
+        "filters": [],
+        "grain": "week",
+        "start": "2026-01-26",
+        "end": "2026-04-12"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT pay.*, c.state, c.region, c.product, c.cause, c.adjuster_id, c.repair_shop_id\n    FROM claim_payments pay\n    JOIN claims c USING (claim_id)\n)\nSELECT CAST(date_trunc('week', payment_date) AS DATE) AS period, sum(amount) AS value\nFROM source\nWHERE payment_date >= DATE '2026-01-26'\n  AND payment_date <= DATE '2026-04-12'\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) wk, sum(amount) total, sum(amount) FILTER (WHERE load_batch LIKE 'reload-%') reload_amt, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') excl_reload, count(*) FILTER (WHERE load_batch LIKE 'reload-%') reload_rows FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) wk, sum(amount) total, sum(amount) FILTER (WHERE load_batch LIKE 'reload-%') reload_amt, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') excl_reload, count(*) FILTER (WHERE load_batch LIKE 'reload-%') reload_rows FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1",
+      "rows": 5,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'"
+      },
+      "source": "custom_query",
+      "error": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"matched\"\n\nLINE 1: ...=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE r.load_batch LIKE 'reload...\n                                                                       ^"
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT * FROM weather_events WHERE start_date BETWEEN '2026-02-01' AND '2026-03-15'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT * FROM weather_events WHERE start_date BETWEEN '2026-02-01' AND '2026-03-15'",
+      "rows": 0,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type)) AS matched_rows FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type)) AS matched_rows FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-659beac7b10a",
+      "run_id": "r-a050e7ab5978",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 226,
+      "cache_read_input_tokens": 8085,
+      "cache_creation_input_tokens": 163,
+      "cost_usd": 0.004293,
+      "seconds": 2.85,
+      "request_id": "req_011Cg3vqDyxyLFqa1kxYWrVY"
+    },
+    {
+      "session_id": "s-659beac7b10a",
+      "run_id": "r-a050e7ab5978",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 622,
+      "cache_read_input_tokens": 8248,
+      "cache_creation_input_tokens": 1309,
+      "cost_usd": 0.011146,
+      "seconds": 4.77,
+      "request_id": "req_011Cg3vqSaz7Kqth6B1GDeVi"
+    },
+    {
+      "session_id": "s-659beac7b10a",
+      "run_id": "r-a050e7ab5978",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 280,
+      "cache_read_input_tokens": 9557,
+      "cache_creation_input_tokens": 1071,
+      "cost_usd": 0.007393,
+      "seconds": 2.59,
+      "request_id": "req_011Cg3vqnnB9U2skjpkSoHxE"
+    },
+    {
+      "session_id": "s-659beac7b10a",
+      "run_id": "r-a050e7ab5978",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1996,
+      "cache_read_input_tokens": 10628,
+      "cache_creation_input_tokens": 338,
+      "cost_usd": 0.022935,
+      "seconds": 12.14,
+      "request_id": "req_011Cg3vqz2bzRqANiVDdnujM"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate rows from reload-2026-03-14 in claim_payments",
+      "reason": "159 rows ($893K) duplicate nightly-loaded payments and overstate paid and incurred amounts. Data engineering should confirm the cause and fix it."
+    }
+  ],
+  "session_id": "s-659beac7b10a",
+  "run_id": "r-a050e7ab5978",
+  "numbers": {
+    "checked": 9,
+    "confirmed": 9,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why did paid claims spike in early March 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01GXyX5Ggewt6GuzsTyiGuu3",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01L1H2JUzTN197tT3GSP3y23",
+          "input": {
+            "metric": "paid_amount",
+            "dimensions": [],
+            "filters": [],
+            "grain": "week",
+            "start": "2026-01-26",
+            "end": "2026-04-12"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01GXyX5Ggewt6GuzsTyiGuu3",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01L1H2JUzTN197tT3GSP3y23",
+          "content": "{\"metric\": \"paid_amount\", \"label\": \"Paid amount\", \"unit\": \"USD\", \"definition\": \"sum(amount) over payment_facts\", \"sql\": \"WITH source AS (\\n    SELECT pay.*, c.state, c.region, c.product, c.cause, c.adjuster_id, c.repair_shop_id\\n    FROM claim_payments pay\\n    JOIN claims c USING (claim_id)\\n)\\nSELECT CAST(date_trunc('week', payment_date) AS DATE) AS period, sum(amount) AS value\\nFROM source\\nWHERE payment_date >= DATE '2026-01-26'\\n  AND payment_date <= DATE '2026-04-12'\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2026-01-26\", 472580.29], [\"2026-02-02\", 630233.29], [\"2026-02-09\", 642494.97], [\"2026-02-16\", 488849.2], [\"2026-02-23\", 535463.5], [\"2026-03-02\", 882403.6], [\"2026-03-09\", 1001251.19], [\"2026-03-16\", 785752.52], [\"2026-03-23\", 789776.07], [\"2026-03-30\", 622004.03], [\"2026-04-06\", 865930.01]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSygUKEAgSGAI4AUIIdGhpbmtpbmcSDHcmR/irfd0s66blIhoM5AouUAi2notqXV8/IjDFt+XFbOEBe8Bf7ma7pFPzRbnE8mQyz+Kd2bEJN6IoV8bAWpM8ptz5534urIOt9P0q5wSm3l6V3bLacvonUJIlkbCizDJ4XeTmxAVSLBpW3CU/VmCGiM5YmVcTFc5E7iKlmp2mZ6BS2qbCw0vLPn/FNkUdDX138KqE2fdm2FDaq8ASz4qglycRporHWbZEewJ561FogOySW/uujVpEtQOCdy1G7kWrF2lbeEnz26VHXz5zDaKc2h0alWTO9tVnoh5OSAK0Edp/IVm/UBzxTKUHj1XBgpD7boQjksjoqYDUrFYC4gFbD0384idgAHbkPklFvez8b9+rFATL2K8w/01cj5woGpR244bSjOtojZarVwxsApb/o9BQkt33e1qaygddfdbnUb7cB8iVdxuMxezsa/xpgHu7vGkgy+PLodPxfe3N/9vFpgX4GUsbpdX9+OR91MA0Z7XJynv/I83/zpeXqiukRfpD6PcatFDnH0qeJ00ljLR5UoPwzHb8GmNrgeVX/o06eBrpgcsvOkCmG3JKyXVqBg4gt6xPpfZSHS40xNPFGnZ9jeXnxq/1Dk+tRtiaRm7w8O3EaKu0cRW+1L14gJBq6NZezcUDvF1XsoeY56Oo1FGFYlq49/+3WCRg85T3BS/lsNdOVAaxyzgQNP3MMWgS/OdHLXENxMEMDs1r9CyO9HTSzFss2mZb3BzabCnmpl1zEVeIywVotjnYQeAXHp5xq2TNL4jNPhrskW9Sd0DROQC+s+8sJKLgYWpBpB/1EX76GKloQFEvyX4l7UPjlKVs8qJ7eGX525gbdMQtvzeTIImOUOnMeAvLpeEzY4Re+uxyQLHOKVqvL4WnzlAbVZ32qt3kVWD5s0DtO1XbiuxVtcGU7gjVwjkYAQ==",
+          "thinking": "The spike looks genuine, so I should quantify how much duplicates are contributing and check for other causes like a weather event, then run some queries to confirm.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_019PPPkc65D7uLXHsMB4enCW",
+          "input": {
+            "sql": "SELECT CAST(date_trunc('week',payment_date) AS DATE) wk, sum(amount) total, sum(amount) FILTER (WHERE load_batch LIKE 'reload-%') reload_amt, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') excl_reload, count(*) FILTER (WHERE load_batch LIKE 'reload-%') reload_rows FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01YaHZrAPJghpBe39vEpqUBb",
+          "input": {
+            "sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01K62trbRWaVsCbGiLWxsw3V",
+          "input": {
+            "sql": "SELECT * FROM weather_events WHERE start_date BETWEEN '2026-02-01' AND '2026-03-15'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019PPPkc65D7uLXHsMB4enCW",
+          "content": "{\"columns\": [\"wk\", \"total\", \"reload_amt\", \"excl_reload\", \"reload_rows\"], \"rows\": [[\"2026-02-16\", 488849.2, null, 488849.2, 0], [\"2026-02-23\", 535463.5, null, 535463.5, 0], [\"2026-03-02\", 882403.6, 441201.8, 441201.8, 84], [\"2026-03-09\", 1001251.19, 451796.95, 549454.24, 75], [\"2026-03-16\", 785752.52, null, 785752.52, 0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01YaHZrAPJghpBe39vEpqUBb",
+          "content": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"matched\"\n\nLINE 1: ...=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE r.load_batch LIKE 'reload...\n                                                                       ^",
+          "is_error": true
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01K62trbRWaVsCbGiLWxsw3V",
+          "content": "{\"columns\": [\"event_id\", \"state\", \"area\", \"event_type\", \"start_date\", \"end_date\", \"severity\"], \"rows\": [], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSkAYKEAgSGAI4AUIIdGhpbmtpbmcSDCMasO8rSA+DtisciRoMRTwYlvkxCG7vGV8hIjASLV4GfsoGdudFSE20Tb2UD26TLgw5t+3bUw8RJUtqmm8tRJL8livAPWlylDfQjJIqrQXNnRaHoRJChEPpdkLp2XmqOXQHQO2Wb8pvp9dTqzNa2rqu6IY6HysnWzRttqb1+TmbHAUOR7gMjasqT9zRRMyb19ODOD/uyt9V8rwj+gsW49tcQZTqKSbiXq9fK1DurVNpNds5qH6e9VdAV6GHlpM52wMyOWsIlfYuqbVHuXYWDQZFcu515CD9XbXyzBL/IIwqdUkNEoGJeR9Yz3Dm5fPQhIcbKT/TFhpKNEIIEsV4rQqaU5NteOLtTy4kDNfvqHcPsczHUPpEbm8OHQ92JaYrzVDZ79dFl8GEUS8b6cFW5yiBJVqv8XgNZRe/T1pPMa+/kslrx5AQVrJwBzXI5xWzRZayMFRQmbn8tCJ4HM0SOutp348Wkk2VEzuDMKw7Zv0XxU+M8eLyCX2khxlbfLOPzaD0OcZ3rKSofc6jEVwYH0Z5b5xWoEZJHZTA/CeA8DPsH7fYFpbv48RPVGK2+3Oq11ty2uwxDkk/Dg7HESVcSDfwBMMDLWjh/mZdJ5SPY+g/QGq6cRG5qkIQjiHDMp6w8QljAIG7DMQdaDY+pw/qSB5HISVFKPAVyzZ/Xma050auNyQMu/mkTC/fMdHcuLdzjrmkaDxye2xRoRImWHjDGShwGZtcRaKgzINNSUZ/jt8fTRyp612zPZv0PNBk1l+WUC9mUKEhAHmkYzo2h57it/6KHHib3O3ucn2OKGBFu5Y+SFtdAtHRNLazpNn06My9QUNdsZ3uAQKVzBf6Vul6uwoStqGnTOsw3XT6vmPC0X1fQTvy9XZp0ClPJRpTpn/SV4+hfSAYi76yv0wfshVTePi/yOowMrmUNntLXa1isiiloeIZuZhbGS479BeE+9anrWwpsAyWaiwkuewqSBbyWmSVJdQFglY/MGqKtQ4KNnPFi08OzZfnSTFg4Qs7GAE=",
+          "thinking": "I'm checking that the reload amount equals exactly half of the week 1 total, 441201.8, and confirming the numbers match.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_012hqwzoUCAdQoJtqVM1j4wM",
+          "input": {
+            "sql": "SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type)) AS matched_rows FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012hqwzoUCAdQoJtqVM1j4wM",
+          "content": "{\"columns\": [\"n\", \"amt\", \"claims\", \"matched_rows\"], \"rows\": [[159, 892998.75, 139, 159]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Paid claims means the paid_amount metric, which is the sum of claim_payments.amount by payment date. I compared weekly totals for early March 2026 (weeks starting 2026-03-02 and 2026-03-09) with the weeks before and after.\",\"answer\":\"The spike was mostly a data problem. Weekly paid amounts jumped from about $535K (week of 2/23) to $882K (week of 3/2) and $1.00M (week of 3/9). A non-nightly load, 'reload-2026-03-14', added 159 payment rows dated 2026-03-02 to 03-13. Every one of them exactly duplicates a payment already loaded by a nightly batch, so they are double-counted. They total $892,999 across 139 claims: $441K in week 3/2 and $452K in week 3/9. Without them, those weeks are about $441K and $549K, which is in line with or below nearby weeks. No weather event started in Feb\u2013mid-Mar 2026 that could explain a real surge. Reported paid figures for early March are overstated by about $893K until the duplicates are removed.\",\"answer_sql\":\"SELECT CAST(date_trunc('week',payment_date) AS DATE) AS week, sum(amount) AS reported_paid, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') AS paid_excluding_reload FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"The reload batch's rows account for about half of paid amount in the weeks of 3/2 and 3/9.\",\"evidence_sql\":\"SELECT CAST(date_trunc('week',payment_date) AS DATE) wk, sum(amount) total, sum(amount) FILTER (WHERE load_batch LIKE 'reload-%') reload_amt, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') excl_reload FROM claim_payments WHERE payment_date BETWEEN '2026-02-16' AND '2026-03-22' GROUP BY 1 ORDER BY 1\",\"key_numbers\":[{\"label\":\"Week 3/2 reported\",\"value\":882403.6,\"unit\":\"USD\"},{\"label\":\"Week 3/2 reload portion\",\"value\":441201.8,\"unit\":\"USD\"},{\"label\":\"Week 3/9 reported\",\"value\":1001251.19,\"unit\":\"USD\"},{\"label\":\"Week 3/9 reload portion\",\"value\":451796.95,\"unit\":\"USD\"},{\"label\":\"Week 3/9 excluding reload\",\"value\":549454.24,\"unit\":\"USD\"}],\"confidence\":\"high\"},{\"claim\":\"All 159 reload rows duplicate payments already loaded by nightly batches (same claim, date, amount and payee type).\",\"evidence_sql\":\"SELECT count(*) n, sum(r.amount) amt, count(DISTINCT r.claim_id) claims, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch LIKE 'nightly-%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type)) AS matched_rows FROM claim_payments r WHERE r.load_batch LIKE 'reload-%'\",\"key_numbers\":[{\"label\":\"Reload rows\",\"value\":159,\"unit\":\"rows\"},{\"label\":\"Rows matching a nightly row\",\"value\":159,\"unit\":\"rows\"},{\"label\":\"Duplicated amount\",\"value\":892998.75,\"unit\":\"USD\"},{\"label\":\"Claims affected\",\"value\":139,\"unit\":\"claims\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"Data problem: payments loaded twice\",\"verdict\":\"supported\",\"evidence\":\"The reload-2026-03-14 batch duplicates 159 nightly-loaded payments totalling $893K, which is almost the entire excess over normal weekly levels.\"},{\"hypothesis\":\"External event (weather)\",\"verdict\":\"ruled_out\",\"evidence\":\"weather_events has no events starting between 2026-02-01 and 2026-03-15.\"},{\"hypothesis\":\"Real operational or normal variation\",\"verdict\":\"ruled_out\",\"evidence\":\"Excluding the reload rows, the weeks of 3/2 and 3/9 are about $441K and $549K, within or below the Feb range of $489K\u2013$642K.\"}],\"data_quality_issues\":[{\"issue\":\"159 payment rows from load batch reload-2026-03-14 exactly duplicate rows from nightly batches (payments dated 2026-03-02 to 2026-03-13).\",\"impact\":\"Paid amount is overstated by $892,999 in early March 2026. Incurred losses and loss ratio are also inflated for the affected claims.\"}],\"charts\":[{\"title\":\"Weekly paid amount: reported vs excluding reload batch\",\"sql\":\"SELECT CAST(date_trunc('week',payment_date) AS DATE) AS week, sum(amount) AS reported_paid, sum(amount) FILTER (WHERE load_batch NOT LIKE 'reload-%') AS paid_excluding_reload FROM claim_payments WHERE payment_date BETWEEN '2026-01-26' AND '2026-04-12' GROUP BY 1 ORDER BY 1\",\"type\":\"line\",\"x\":\"week\",\"y\":\"reported_paid\"}],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate rows from reload-2026-03-14 in claim_payments\",\"reason\":\"159 rows ($893K) duplicate nightly-loaded payments and overstate paid and incurred amounts. Data engineering should confirm the cause and fix it.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

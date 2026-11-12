@@ -1,0 +1,344 @@
+{
+  "case_id": "what-claim-frequency-by-state-home-2026-q1",
+  "question": "What was the home claim frequency by state in Q1 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Home claim frequency by state for Q1 2026 (loss dates 2026-01-01 to 2026-03-31). Frequency is the agreed metric: 1000 \u00d7 home claims \u00f7 policy-months in force, so it is claims per 1,000 policies per month. Claims are counted by loss date.",
+    "answer": "Q1 2026 home claim frequency, in claims per 1,000 policies per month: IL 7.13, OH 6.93, GA 5.34, FL 5.31, TX 5.18, NY 5.15, NC 3.66, CA 2.98. The two North states IL and OH are highest, and CA is lowest. Q1 is old enough that late reporting should have little effect.",
+    "answer_sql": "SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS frequency_per_1000_per_month FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state",
+    "findings": [
+      {
+        "claim": "Home claim frequency by state, Q1 2026, in claims per 1,000 policies per month",
+        "evidence_sql": "SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS f FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state",
+        "key_numbers": [
+          {
+            "label": "IL",
+            "value": 7.134,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "OH",
+            "value": 6.93,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "GA",
+            "value": 5.336,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "FL",
+            "value": 5.312,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "TX",
+            "value": 5.181,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "NY",
+            "value": 5.154,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "NC",
+            "value": 3.655,
+            "unit": "per 1,000 per month"
+          },
+          {
+            "label": "CA",
+            "value": 2.98,
+            "unit": "per 1,000 per month"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "Claims are reported late, so the most recent loss months are incomplete. Claims has no duplicate rows.",
+        "impact": "Q1 2026 is more than 5 months old, so the impact is negligible."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.028337,
+  "seconds": 13.84,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_frequency"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_frequency",
+        "dimensions": [
+          "state"
+        ],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "home"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2026-01-01",
+        "end": "2026-03-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT state, count(*) AS value\n    FROM source\n    WHERE loss_date >= DATE '2026-01-01'\n      AND loss_date <= DATE '2026-03-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT state, sum(policies_in_force) AS value\n    FROM source\n    WHERE month >= DATE '2026-01-01'\n      AND month <= DATE '2026-03-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (state)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS frequency_per_1000_per_month FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state"
+      },
+      "source": "custom_query",
+      "sql": "SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS frequency_per_1000_per_month FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state",
+      "rows": 8,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-bfb2e94c407c",
+      "run_id": "r-b8ad38485700",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 53,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 169,
+      "cost_usd": 0.00254,
+      "seconds": 1.72,
+      "request_id": "req_011Cg25UBfWdL3UZ1fUDQjMH"
+    },
+    {
+      "session_id": "s-bfb2e94c407c",
+      "run_id": "r-b8ad38485700",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 242,
+      "cache_read_input_tokens": 8064,
+      "cache_creation_input_tokens": 160,
+      "cost_usd": 0.004437,
+      "seconds": 2.49,
+      "request_id": "req_011Cg25UJkuCXWnKBYUvLaRp"
+    },
+    {
+      "session_id": "s-bfb2e94c407c",
+      "run_id": "r-b8ad38485700",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 237,
+      "cache_read_input_tokens": 8224,
+      "cache_creation_input_tokens": 1625,
+      "cost_usd": 0.008081,
+      "seconds": 2.53,
+      "request_id": "req_011Cg25UVqf34qCFmqzqx1rH"
+    },
+    {
+      "session_id": "s-bfb2e94c407c",
+      "run_id": "r-b8ad38485700",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1041,
+      "cache_read_input_tokens": 9849,
+      "cache_creation_input_tokens": 358,
+      "cost_usd": 0.013279,
+      "seconds": 6.76,
+      "request_id": "req_011Cg25UgqSo34izTtG2GCfP"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-bfb2e94c407c",
+  "run_id": "r-b8ad38485700",
+  "numbers": {
+    "checked": 8,
+    "confirmed": 8,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the home claim frequency by state in Q1 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01ULqdxhr4tugCBmEincF6h4",
+          "input": {
+            "name": "claim_frequency"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01ULqdxhr4tugCBmEincF6h4",
+          "content": "{\"name\": \"claim_frequency\", \"label\": \"Claim frequency\", \"description\": \"Claims per 1,000 policies in force, per month.\", \"unit\": \"claims per 1,000 policies per month\", \"dimensions\": [\"state\", \"region\", \"product\"], \"definition\": \"1000 * claim_count / policy_months\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01HPGzdmZe318quyTaXj8X7M",
+          "input": {
+            "metric": "claim_frequency",
+            "dimensions": [
+              "state"
+            ],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "home"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2026-01-01",
+            "end": "2026-03-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01FxyVJgN1mXZGXeEWbXpwDd",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01HPGzdmZe318quyTaXj8X7M",
+          "content": "{\"metric\": \"claim_frequency\", \"label\": \"Claim frequency\", \"unit\": \"claims per 1,000 policies per month\", \"definition\": \"1000 * claim_count / policy_months\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT state, count(*) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2026-01-01'\\n      AND loss_date <= DATE '2026-03-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT state, sum(policies_in_force) AS value\\n    FROM source\\n    WHERE month >= DATE '2026-01-01'\\n      AND month <= DATE '2026-03-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (state)\\nORDER BY ALL\", \"columns\": [\"state\", \"value\"], \"rows\": [[\"CA\", 2.9803019571818266], [\"FL\", 5.312416271700066], [\"GA\", 5.335752207667476], [\"IL\", 7.133603839590931], [\"NC\", 3.655111775348708], [\"NY\", 5.154180274483528], [\"OH\", 6.930081636361676], [\"TX\", 5.1805581501953695]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01FxyVJgN1mXZGXeEWbXpwDd",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01BPyxpR6jCGcMoMa1rHFSjR",
+          "input": {
+            "sql": "SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS frequency_per_1000_per_month FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01BPyxpR6jCGcMoMa1rHFSjR",
+          "content": "{\"columns\": [\"state\", \"frequency_per_1000_per_month\"], \"rows\": [[\"CA\", 2.98], [\"FL\", 5.312], [\"GA\", 5.336], [\"IL\", 7.134], [\"NC\", 3.655], [\"NY\", 5.154], [\"OH\", 6.93], [\"TX\", 5.181]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Home claim frequency by state for Q1 2026 (loss dates 2026-01-01 to 2026-03-31). Frequency is the agreed metric: 1000 \u00d7 home claims \u00f7 policy-months in force, so it is claims per 1,000 policies per month. Claims are counted by loss date.\",\"answer\":\"Q1 2026 home claim frequency, in claims per 1,000 policies per month: IL 7.13, OH 6.93, GA 5.34, FL 5.31, TX 5.18, NY 5.15, NC 3.66, CA 2.98. The two North states IL and OH are highest, and CA is lowest. Q1 is old enough that late reporting should have little effect.\",\"answer_sql\":\"SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS frequency_per_1000_per_month FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state\",\"findings\":[{\"claim\":\"Home claim frequency by state, Q1 2026, in claims per 1,000 policies per month\",\"evidence_sql\":\"SELECT c.state, round(1000.0*count(*)/(SELECT sum(policies_in_force) FROM exposure_monthly e WHERE e.state=c.state AND e.product='home' AND e.month BETWEEN DATE '2026-01-01' AND DATE '2026-03-31'),3) AS f FROM claims c WHERE c.product='home' AND c.loss_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' GROUP BY c.state ORDER BY c.state\",\"key_numbers\":[{\"label\":\"IL\",\"value\":7.134,\"unit\":\"per 1,000 per month\"},{\"label\":\"OH\",\"value\":6.93,\"unit\":\"per 1,000 per month\"},{\"label\":\"GA\",\"value\":5.336,\"unit\":\"per 1,000 per month\"},{\"label\":\"FL\",\"value\":5.312,\"unit\":\"per 1,000 per month\"},{\"label\":\"TX\",\"value\":5.181,\"unit\":\"per 1,000 per month\"},{\"label\":\"NY\",\"value\":5.154,\"unit\":\"per 1,000 per month\"},{\"label\":\"NC\",\"value\":3.655,\"unit\":\"per 1,000 per month\"},{\"label\":\"CA\",\"value\":2.98,\"unit\":\"per 1,000 per month\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"Claims are reported late, so the most recent loss months are incomplete. Claims has no duplicate rows.\",\"impact\":\"Q1 2026 is more than 5 months old, so the impact is negligible.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

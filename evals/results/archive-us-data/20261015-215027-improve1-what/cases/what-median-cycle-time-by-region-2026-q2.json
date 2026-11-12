@@ -1,0 +1,340 @@
+{
+  "case_id": "what-median-cycle-time-by-region-2026-q2",
+  "repeat": 1,
+  "question": "What was the median cycle time by region for claims reported in Q2 2026?",
+  "role": "claims_ops_manager",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Median days from report date to close date, for closed claims only (the agreed cycle_time_days metric). It covers claims reported 2026-04-01 to 2026-06-30 and is split by claim region.",
+    "answer": "For claims reported in Q2 2026, the median cycle time was 27 days in California, 28 days in the North, 28.5 days in Texas and 34 days in the Southeast. The Southeast is about a week slower than the other regions. Only closed claims count. A few Q2 claims are still open (16 of 1,085), so these medians may rise slightly as the slowest claims close. The open claims are mostly in the Southeast (10).",
+    "answer_sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region",
+    "findings": [
+      {
+        "claim": "Median cycle time by region for Q2 2026 report dates (closed claims)",
+        "evidence_sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region",
+        "key_numbers": [
+          {
+            "label": "California",
+            "value": 27,
+            "unit": "days"
+          },
+          {
+            "label": "North",
+            "value": 28,
+            "unit": "days"
+          },
+          {
+            "label": "Texas",
+            "value": 28.5,
+            "unit": "days"
+          },
+          {
+            "label": "Southeast",
+            "value": 34,
+            "unit": "days"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "Open Q2 claims are excluded from the median (16 open: Southeast 10, North 2, California 3, Texas 1).",
+        "impact": "Medians are slightly understated, most of all in the Southeast."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.024988,
+  "seconds": 13.37,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "cycle_time_days"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "cycle_time_days",
+        "dimensions": [
+          "region"
+        ],
+        "filters": [],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT region, median(days_to_close) FILTER (WHERE status = 'closed') AS value\nFROM source\nWHERE report_date >= DATE '2026-04-01'\n  AND report_date <= DATE '2026-06-30'\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_days, count(*) AS claims, count(*) FILTER (WHERE status='open') AS open_claims FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region"
+      },
+      "source": "custom_query",
+      "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_days, count(*) AS claims, count(*) FILTER (WHERE status='open') AS open_claims FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region"
+      },
+      "source": "custom_query",
+      "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region",
+      "rows": 4,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-8308df030849",
+      "run_id": "r-280a006dd919",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 54,
+      "cache_read_input_tokens": 8085,
+      "cache_creation_input_tokens": 172,
+      "cost_usd": 0.002595,
+      "seconds": 2.1,
+      "request_id": "req_011Cg3uj6GqU7qcoh95xoCMJ"
+    },
+    {
+      "session_id": "s-8308df030849",
+      "run_id": "r-280a006dd919",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 179,
+      "cache_read_input_tokens": 8257,
+      "cache_creation_input_tokens": 251,
+      "cost_usd": 0.004073,
+      "seconds": 1.99,
+      "request_id": "req_011Cg3ujF4QtJqSGGJ98589W"
+    },
+    {
+      "session_id": "s-8308df030849",
+      "run_id": "r-280a006dd919",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 172,
+      "cache_read_input_tokens": 8508,
+      "cache_creation_input_tokens": 631,
+      "cost_usd": 0.005003,
+      "seconds": 2.1,
+      "request_id": "req_011Cg3ujPbsSnDwEa4D97FDh"
+    },
+    {
+      "session_id": "s-8308df030849",
+      "run_id": "r-280a006dd919",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 143,
+      "cache_read_input_tokens": 9139,
+      "cache_creation_input_tokens": 279,
+      "cost_usd": 0.003959,
+      "seconds": 1.94,
+      "request_id": "req_011Cg3ujYj3jU25affxpnHG2"
+    },
+    {
+      "session_id": "s-8308df030849",
+      "run_id": "r-280a006dd919",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 692,
+      "cache_read_input_tokens": 9418,
+      "cache_creation_input_tokens": 220,
+      "cost_usd": 0.009358,
+      "seconds": 4.92,
+      "request_id": "req_011Cg3ujh2ckgjDBA7RoEkjc"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-8308df030849",
+  "run_id": "r-280a006dd919",
+  "numbers": {
+    "checked": 4,
+    "confirmed": 4,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims operations manager. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the median cycle time by region for claims reported in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01SxJVSYsa2xWpDR2DyHT7qR",
+          "input": {
+            "name": "cycle_time_days"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01SxJVSYsa2xWpDR2DyHT7qR",
+          "content": "{\"name\": \"cycle_time_days\", \"label\": \"Cycle time\", \"description\": \"Median days from report date to close date, for closed claims, by report date.\", \"unit\": \"days\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"median(days_to_close) FILTER (WHERE status = 'closed') over claim_facts\", \"time_column\": \"report_date\", \"notes\": \"Only closed claims count, so the most recent report months look faster than they will end up: their slowest claims are still open.\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01EsQQnVbt3GPDSgCEKrEEmf",
+          "input": {
+            "metric": "cycle_time_days",
+            "dimensions": [
+              "region"
+            ],
+            "filters": [],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01EsQQnVbt3GPDSgCEKrEEmf",
+          "content": "{\"metric\": \"cycle_time_days\", \"label\": \"Cycle time\", \"unit\": \"days\", \"definition\": \"median(days_to_close) FILTER (WHERE status = 'closed') over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT region, median(days_to_close) FILTER (WHERE status = 'closed') AS value\\nFROM source\\nWHERE report_date >= DATE '2026-04-01'\\n  AND report_date <= DATE '2026-06-30'\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"region\", \"value\"], \"rows\": [[\"California\", 27.0], [\"North\", 28.0], [\"Southeast\", 34.0], [\"Texas\", 28.5]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VVckn2UWPk1ggUQafadhdu",
+          "input": {
+            "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_days, count(*) AS claims, count(*) FILTER (WHERE status='open') AS open_claims FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VVckn2UWPk1ggUQafadhdu",
+          "content": "{\"columns\": [\"region\", \"median_days\", \"claims\", \"open_claims\"], \"rows\": [[\"California\", 27.0, 198, 3], [\"North\", 28.0, 345, 2], [\"Southeast\", 34.0, 307, 10], [\"Texas\", 28.5, 235, 1]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Pz6dGah1Yksbo6GeRSaSdD",
+          "input": {
+            "sql": "SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Pz6dGah1Yksbo6GeRSaSdD",
+          "content": "{\"columns\": [\"region\", \"median_cycle_days\"], \"rows\": [[\"California\", 27.0], [\"North\", 28.0], [\"Southeast\", 34.0], [\"Texas\", 28.5]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Median days from report date to close date, for closed claims only (the agreed cycle_time_days metric). It covers claims reported 2026-04-01 to 2026-06-30 and is split by claim region.\",\"answer\":\"For claims reported in Q2 2026, the median cycle time was 27 days in California, 28 days in the North, 28.5 days in Texas and 34 days in the Southeast. The Southeast is about a week slower than the other regions. Only closed claims count. A few Q2 claims are still open (16 of 1,085), so these medians may rise slightly as the slowest claims close. The open claims are mostly in the Southeast (10).\",\"answer_sql\":\"SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region\",\"findings\":[{\"claim\":\"Median cycle time by region for Q2 2026 report dates (closed claims)\",\"evidence_sql\":\"SELECT region, median(close_date - report_date) FILTER (WHERE status='closed') AS median_cycle_days FROM claims WHERE report_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY region ORDER BY region\",\"key_numbers\":[{\"label\":\"California\",\"value\":27,\"unit\":\"days\"},{\"label\":\"North\",\"value\":28,\"unit\":\"days\"},{\"label\":\"Texas\",\"value\":28.5,\"unit\":\"days\"},{\"label\":\"Southeast\",\"value\":34,\"unit\":\"days\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"Open Q2 claims are excluded from the median (16 open: Southeast 10, North 2, California 3, Texas 1).\",\"impact\":\"Medians are slightly understated, most of all in the Southeast.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,775 @@
+{
+  "case_id": "why-repair-shop-outlier",
+  "repeat": 1,
+  "question": "Is any repair shop an outlier on cost?",
+  "role": "fraud_team_lead",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "I compared repair shops on average incurred cost per claim (paid plus reserve) for auto claims that have a repair shop: collision, glass and hail. Payments were de-duplicated first. To control for claim mix, I compared each shop with the average for the same cause and state. The period is all loss dates from 2025-01-01 to 2026-09-30.",
+    "answer": "Yes. RS-041 Campbell Body Works (non-preferred, Chicago, IL) is the clearest outlier. Its 79 claims average $5,774 incurred. That is about 1.40 times the average for the same cause and state ($4,132), and the highest ratio of any shop. The next shop, RS-029, has only 23 claims and a ratio of 1.33. Other shops are at or below about 1.14. The excess is concentrated in one adjuster: ADJ-024 (Adam Sanchez, North region) handles 37 of the 79 RS-041 claims, 47%, and those average $6,820. The other 42 RS-041 claims average $4,853. ADJ-024's collision claims at other shops average $4,809, against $8,230 at RS-041. The pattern is spread across the period, and the average rose to $9,032 for claims with loss dates in 2026 Q3. This is evidence for review, not a finding of wrongdoing.",
+    "answer_sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1",
+    "findings": [
+      {
+        "claim": "RS-041 has the highest mix-adjusted cost ratio of any shop.",
+        "evidence_sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1",
+        "key_numbers": [
+          {
+            "label": "RS-041 average incurred",
+            "value": 5774,
+            "unit": "USD"
+          },
+          {
+            "label": "Expected for same cause and state",
+            "value": 4132,
+            "unit": "USD"
+          },
+          {
+            "label": "Ratio",
+            "value": 1.4,
+            "unit": "x"
+          },
+          {
+            "label": "Claims",
+            "value": 79,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Adjuster ADJ-024 handles 37 of the 79 RS-041 claims, and those claims cost more than the shop's other claims.",
+        "evidence_sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select adjuster_id='ADJ-024' is_adj024, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where repair_shop_id='RS-041' group by 1",
+        "key_numbers": [
+          {
+            "label": "ADJ-024 claims at RS-041",
+            "value": 37,
+            "unit": "claims"
+          },
+          {
+            "label": "ADJ-024 average at RS-041",
+            "value": 6820,
+            "unit": "USD"
+          },
+          {
+            "label": "Other adjusters' average at RS-041",
+            "value": 4853,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "medium"
+      },
+      {
+        "claim": "ADJ-024's collision claims at RS-041 cost much more than their collision claims elsewhere.",
+        "evidence_sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select c.repair_shop_id='RS-041' at_shop, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where adjuster_id='ADJ-024' and cause='collision' group by 1",
+        "key_numbers": [
+          {
+            "label": "ADJ-024 collision average at RS-041",
+            "value": 8230,
+            "unit": "USD"
+          },
+          {
+            "label": "ADJ-024 collision average at other shops",
+            "value": 4809,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 claim_payments rows were reloaded in batch reload-2026-03-14 and duplicate existing payments.",
+        "impact": "I removed exact duplicates before computing costs. Without that step, shop costs are overstated."
+      },
+      {
+        "issue": "Recent claims are still developing, and reserves are estimates.",
+        "impact": "Incurred amounts for recent months may change. The Q3 2026 figure for RS-041 rests on only 14 claims."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Review RS-041 Campbell Body Works claims handled by ADJ-024",
+        "reason": "RS-041 averages 1.4 times the expected cost, and about half its claims go through one adjuster at roughly 70% above that adjuster's other collision claims. A person should check estimates, invoices and the adjuster-shop relationship."
+      }
+    ],
+    "open_questions": [
+      "Do you want the review extended to non-collision claims or to the home-claims contractor payees?"
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.088159,
+  "seconds": 43.07,
+  "tool_calls": [
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select c.repair_shop_id, r.name, r.network_status, r.state, r.metro, count(*) n, avg(p.paid) avg_paid from claims c join repair_shops r using(repair_shop_id) left join (select claim_id, sum(amount) paid from claim_payments group by 1) p using(claim_id) group by all order by avg_paid desc limit 15"
+      },
+      "source": "custom_query",
+      "sql": "select c.repair_shop_id, r.name, r.network_status, r.state, r.metro, count(*) n, avg(p.paid) avg_paid from claims c join repair_shops r using(repair_shop_id) left join (select claim_id, sum(amount) paid from claim_payments group by 1) p using(claim_id) group by all order by avg_paid desc limit 15",
+      "rows": 15,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null) select repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, count(distinct adjuster_id) adjusters, round(max(case when 1=1 then 0 end)) z, min(loss_date) first_loss, max(loss_date) last_loss from cl join repair_shops r using(repair_shop_id) group by all order by avg_inc desc limit 8"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null) select repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, count(distinct adjuster_id) adjusters, round(max(case when 1=1 then 0 end)) z, min(loss_date) first_loss, max(loss_date) last_loss from cl join repair_shops r using(repair_shop_id) group by all order by avg_inc desc limit 8",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_inc, round(avg(exp)) expected, round(avg(inc)/avg(exp),2) ratio, round((select avg(inc) from cl)) overall from e group by 1 order by ratio desc limit 6"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_inc, round(avg(exp)) expected, round(avg(inc)/avg(exp),2) ratio, round((select avg(inc) from cl)) overall from e group by 1 order by ratio desc limit 6",
+      "rows": 6,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, p.channel, coalesce(pa.paid,0)+c.reserve_amount inc from claims c join policies p using(policy_id) left join pay pa using(claim_id) where repair_shop_id='RS-041') select 'adjuster' k, adjuster_id v, count(*) n, round(avg(inc)) a from cl group by 2 union all select 'channel',channel,count(*),round(avg(inc)) from cl group by 2 union all select 'cause',cause,count(*),round(avg(inc)) from cl group by 2 union all select 'quarter',cast(date_trunc('quarter',loss_date) as varchar),count(*),round(avg(inc)) from cl group by 2 order by 1,2"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, p.channel, coalesce(pa.paid,0)+c.reserve_amount inc from claims c join policies p using(policy_id) left join pay pa using(claim_id) where repair_shop_id='RS-041') select 'adjuster' k, adjuster_id v, count(*) n, round(avg(inc)) a from cl group by 2 union all select 'channel',channel,count(*),round(avg(inc)) from cl group by 2 union all select 'cause',cause,count(*),round(avg(inc)) from cl group by 2 union all select 'quarter',cast(date_trunc('quarter',loss_date) as varchar),count(*),round(avg(inc)) from cl group by 2 order by 1,2",
+      "rows": 20,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select c.repair_shop_id='RS-041' at_shop, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc, min(loss_date) f, max(loss_date) l from claims c left join pay pa using(claim_id) where adjuster_id='ADJ-024' and cause='collision' group by 1"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select c.repair_shop_id='RS-041' at_shop, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc, min(loss_date) f, max(loss_date) l from claims c left join pay pa using(claim_id) where adjuster_id='ADJ-024' and cause='collision' group by 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select a.full_name,a.region,a.team,a.hire_date,a.leave_date from adjusters a where adjuster_id='ADJ-024'"
+      },
+      "source": "custom_query",
+      "sql": "select a.full_name,a.region,a.team,a.hire_date,a.leave_date from adjusters a where adjuster_id='ADJ-024'",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 3"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 3",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select count(*) from claims where repair_shop_id='RS-041'"
+      },
+      "source": "custom_query",
+      "sql": "select count(*) from claims where repair_shop_id='RS-041'",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select adjuster_id='ADJ-024' is_adj024, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where repair_shop_id='RS-041' group by 1"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select adjuster_id='ADJ-024' is_adj024, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where repair_shop_id='RS-041' group by 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1"
+      },
+      "source": "custom_query",
+      "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select 1"
+      },
+      "source": "custom_query",
+      "sql": "select 1",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 221,
+      "cache_read_input_tokens": 8085,
+      "cache_creation_input_tokens": 165,
+      "cost_usd": 0.004248,
+      "seconds": 2.86,
+      "request_id": "req_011Cg3vjHiH1qogrSMCVuqAN"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 393,
+      "cache_read_input_tokens": 8250,
+      "cache_creation_input_tokens": 1614,
+      "cost_usd": 0.009619,
+      "seconds": 4.57,
+      "request_id": "req_011Cg3vjVyE3wygVECbzuxMq"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 347,
+      "cache_read_input_tokens": 9864,
+      "cache_creation_input_tokens": 958,
+      "cost_usd": 0.007842,
+      "seconds": 3.19,
+      "request_id": "req_011Cg3vjqduMvbBCRQPYFCkv"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 377,
+      "cache_read_input_tokens": 10822,
+      "cache_creation_input_tokens": 601,
+      "cost_usd": 0.007441,
+      "seconds": 3.16,
+      "request_id": "req_011Cg3vk5Vr2Atjo8tXcTg7V"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 383,
+      "cache_read_input_tokens": 11423,
+      "cache_creation_input_tokens": 890,
+      "cost_usd": 0.008344,
+      "seconds": 4.64,
+      "request_id": "req_011Cg3vkK6QUucv4sPEbHqBT"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 295,
+      "cache_read_input_tokens": 12313,
+      "cache_creation_input_tokens": 612,
+      "cost_usd": 0.006947,
+      "seconds": 2.93,
+      "request_id": "req_011Cg3vkfBPALwWDuBm4Hwpb"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 70,
+      "cache_read_input_tokens": 12925,
+      "cache_creation_input_tokens": 436,
+      "cost_usd": 0.004379,
+      "seconds": 1.64,
+      "request_id": "req_011Cg3vkspQWSE9Dos3uS7Sp"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 198,
+      "cache_read_input_tokens": 13361,
+      "cache_creation_input_tokens": 104,
+      "cost_usd": 0.004916,
+      "seconds": 2.3,
+      "request_id": "req_011Cg3vkzx2ENo8f2oyFCFGd"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 295,
+      "cache_read_input_tokens": 13465,
+      "cache_creation_input_tokens": 264,
+      "cost_usd": 0.006307,
+      "seconds": 3.12,
+      "request_id": "req_011Cg3vmAsLBh5nCqpqZVCBS"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 51,
+      "cache_read_input_tokens": 13729,
+      "cache_creation_input_tokens": 382,
+      "cost_usd": 0.004215,
+      "seconds": 1.57,
+      "request_id": "req_011Cg3vmQHxzy11GkgVpJh4K"
+    },
+    {
+      "session_id": "s-ed28ae895f49",
+      "run_id": "r-93c4c9eed6d7",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2087,
+      "cache_read_input_tokens": 14111,
+      "cache_creation_input_tokens": 82,
+      "cost_usd": 0.023901,
+      "seconds": 12.52,
+      "request_id": "req_011Cg3vmX8yb4HyfkXojuDju"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Review RS-041 Campbell Body Works claims handled by ADJ-024",
+      "reason": "RS-041 averages 1.4 times the expected cost, and about half its claims go through one adjuster at roughly 70% above that adjuster's other collision claims. A person should check estimates, invoices and the adjuster-shop relationship."
+    }
+  ],
+  "session_id": "s-ed28ae895f49",
+  "run_id": "r-93c4c9eed6d7",
+  "numbers": {
+    "checked": 9,
+    "confirmed": 9,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Fraud team lead. Sees all data, including personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Is any repair shop an outlier on cost?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_0167TRaX2Q3EUVNcY3Xg7WPe",
+          "input": {
+            "sql": "select c.repair_shop_id, r.name, r.network_status, r.state, r.metro, count(*) n, avg(p.paid) avg_paid from claims c join repair_shops r using(repair_shop_id) left join (select claim_id, sum(amount) paid from claim_payments group by 1) p using(claim_id) group by all order by avg_paid desc limit 15"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01M5H3AHeE25WYDQ56iP4GkP",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0167TRaX2Q3EUVNcY3Xg7WPe",
+          "content": "{\"columns\": [\"repair_shop_id\", \"name\", \"network_status\", \"state\", \"metro\", \"n\", \"avg_paid\"], \"rows\": [[\"RS-041\", \"Campbell Body Works\", \"non-preferred\", \"IL\", \"Chicago\", 79, 5881.753188405797], [\"RS-048\", \"Ray Body Works\", \"non-preferred\", \"NY\", \"Albany\", 38, 5702.509393939394], [\"RS-009\", \"Hood Body Works\", \"preferred\", \"CA\", \"San Diego\", 125, 5544.049259259259], [\"RS-014\", \"Hughes Auto Repair\", \"preferred\", \"FL\", \"Orlando-Tampa\", 86, 5384.33088607595], [\"RS-033\", \"Esparza Body Works\", \"preferred\", \"OH\", \"Cincinnati\", 49, 5348.920666666667], [\"RS-004\", \"Fletcher Collision Center\", \"non-preferred\", \"TX\", \"Dallas-Fort Worth\", 170, 5280.849155844156], [\"RS-043\", \"Whitney Collision Center\", \"preferred\", \"NY\", \"New York City\", 147, 5253.656268656717], [\"RS-047\", \"Larson Collision Center\", \"non-preferred\", \"NY\", \"Buffalo\", 32, 5167.575], [\"RS-001\", \"Bryant Auto Repair\", \"preferred\", \"TX\", \"Dallas-Fort Worth\", 343, 5122.231966666666], [\"RS-032\", \"Molina Auto Repair\", \"preferred\", \"OH\", \"Cleveland\", 66, 5083.977068965517], [\"RS-044\", \"Young Auto Body\", \"preferred\", \"NY\", \"Buffalo\", 54, 5069.838], [\"RS-045\", \"Mays Collision Center\", \"preferred\", \"NY\", \"Albany\", 61, 5049.075471698113], [\"RS-006\", \"Sanford Auto Repair\", \"non-preferred\", \"TX\", \"Austin-San Antonio\", 66, 4998.879491525424], [\"RS-008\", \"George Auto Body\", \"preferred\", \"CA\", \"San Francisco Bay Area\", 103, 4968.705869565218], [\"RS-046\", \"Singleton Auto Body\", \"non-preferred\", \"NY\", \"New York City\", 50, 4900.502608695652]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01M5H3AHeE25WYDQ56iP4GkP",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSuAYKEAgSGAI4AUIIdGhpbmtpbmcSDPmO1Tjyegq8uZRPihoMqJPcTceGaDAWh7TDIjDwAUx1kY+UrjWSaO2SAo4earHHzZIbMqg7FGITywGQYaXAMAjjTZ7Y7v4aVknaVrsq1QXkxzWQ+qBUlmFra42sByjbTqnaLM2TPKzuF39ax0/Vdo93UKwmR6F4NexsAvoPxRXcHNDOhFYDVW4yreo8O3Q3WqDb5XudioERX1vaayMxYnGpX7G2A1+OT6rrzkHPXuTYngTufNJ1mmRQxLhmPGzPKRvvcaenP5BhEbb/APU+9Z+AYuP5DNnxRYG3rPxNR6hLszcpYUxfCNXglZc3clxfRz2MyCbujWRBGc01RCH8GvaKrZdpeSvV514Fau6NXFBsl5zjA/uVZQcJB081LqpprccB/iKcQo5hB3ajEAUGUfNQbdHUXXZmJ4+0FNrs9MIrrWtQMqkGqUKcanCeLiOlZR4LNutsr4HdpcEOHiK3SNdg23WPuJWDCizZCFYYByX/OmKz4o6ZbKK6oCRG2hUImDi8o475dfSQy4m+ZMc8CDdKXTHgyYH36mpMbj8Mbf8LPC7a7jo3gATUyb6bCSqZN93YjP+MnWbXUFPBeIUlbDlbmTG8NPDdPM18iqn5rC6kyx8NqoKcF0tnR+HfSJ2n0kTmWfpB3q8QW5fzxRNI6PtAT0Nw9Q2Ra1CZJ+Lfqgn4YL+ckNNaB835KgUXOF7JqwUC93ZU4TAfbDHeJj4+TlCHRMsxVfIM1MmiQ9lMlCtM6e9XpqlbCW8sVeCQckJFhlfbSKxe16bBFITzy7oQowuyH9ux9/Qgh+CGaXQSD7ros0bbZL7ZcSli4Ox4AgO7pKF2ZhV6fpdfRNxKmnKXi39nICSrXP0yRviKnAefENqwyf1ZyKz/UZCRcowLy7qQD24e19fsvBd4ZfLM/JiLu3gqTkrObG6zUALjzGgpY4bho0+dC+XehXJp83anvDD13fm6+8o6t5QCAqD4Q5XynNw9ttpYQQl/OLd8HL2+o98Y8E+tpxsyGBkheAnCshE5czZTx9MtYDdIeHmlKiqN1vFMJx8egkncUIwD90swx2Q921+8FRgB",
+          "thinking": "I need to exclude duplicates and work with deduplicated paid plus reserve amounts per claim, broken down by shop and claims-per-shop, while also comparing by cause since the mix matters. I want to examine the full distribution and spot any concentrations.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_011B5AoFz4q8hxPdyExjnR4T",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null) select repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, count(distinct adjuster_id) adjusters, round(max(case when 1=1 then 0 end)) z, min(loss_date) first_loss, max(loss_date) last_loss from cl join repair_shops r using(repair_shop_id) group by all order by avg_inc desc limit 8"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_011B5AoFz4q8hxPdyExjnR4T",
+          "content": "{\"columns\": [\"repair_shop_id\", \"name\", \"network_status\", \"n\", \"avg_inc\", \"med\", \"adjusters\", \"z\", \"first_loss\", \"last_loss\"], \"rows\": [[\"RS-041\", \"Campbell Body Works\", \"non-preferred\", 79, 5774.0, 4366.0, 7, 0, \"2025-01-06\", \"2026-09-22\"], [\"RS-048\", \"Ray Body Works\", \"non-preferred\", 38, 5187.0, 4265.0, 7, 0, \"2025-02-13\", \"2026-09-02\"], [\"RS-014\", \"Hughes Auto Repair\", \"preferred\", 86, 5120.0, 4021.0, 6, 0, \"2025-01-06\", \"2026-09-15\"], [\"RS-004\", \"Fletcher Collision Center\", \"non-preferred\", 170, 5092.0, 3711.0, 8, 0, \"2025-01-13\", \"2026-09-24\"], [\"RS-009\", \"Hood Body Works\", \"preferred\", 125, 5033.0, 3896.0, 7, 0, \"2025-01-06\", \"2026-09-22\"], [\"RS-043\", \"Whitney Collision Center\", \"preferred\", 147, 4810.0, 3316.0, 7, 0, \"2025-01-01\", \"2026-09-25\"], [\"RS-033\", \"Esparza Body Works\", \"preferred\", 49, 4748.0, 3763.0, 7, 0, \"2025-01-06\", \"2026-09-29\"], [\"RS-032\", \"Molina Auto Repair\", \"preferred\", 66, 4702.0, 3324.0, 7, 0, \"2025-01-05\", \"2026-09-28\"]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSngYKEAgSGAI4AUIIdGhpbmtpbmcSDFoKXGQTF4hun9TwlhoMpuNUEFSL2kXZDFT9IjCqAbzGtC6M03uMy9UDfcjjSNFRJxOKT5mdz+8myncLP9vt2wkpiSgxju5liFdEb9AquwUsR8/tMyPRCveZ/YjSJ4NKJjJBYEhRyQcQGYfV6xVrElkWU0X78OMg1CasHvenQGwov7PIlcnhedOwblFfbkLhp/uV2BfapzVUpR16XrOfKVr7gTB4tBEuvvpv4lvxQffMJz1FSjNSzPcST/ViPyYpQYdMDhuLEXxZRF/O4j1CggASypeFVb5ROZt3lNIB+Tq+0+yOol9MNP7BLzAz5ENI7xkk4R9EOeW1AaU84n7fa4wixfiWQYxclqM4dAVX7vibDyo9ZWeHXJlSINpKil7fJ1OPpb5KDxRPVHFk5PkQ9lsI8y4xWcbrU5xkCP3FbH2EwPRu1wg4oMI/8cjXyGKQD/q8EmM52jhp8mYj2RrhToIG9k0LDFviez0nkBou0d+4NBIBOFZus2xLZUpS5LbyOzSVmt/wFBIJI53i1SKb03Nhu/zWgFPZHFUnFqWwi2pWDqn6VRxhs4xpCLMLl5g9AtRX+92kFSSpLCGbrmTi3nbt/th+Y/Uv0lgKkIG/UZMsHTDs2WONGEY4ZiUjZJJREg2GOxACcGR39o1fxg58234bwT07GzISUE7aw7xuIqq8CEXtRfSXFYwRTRHy+kfDWaM+9gV3YWLDCdBJgC2aypXh3d0pbm9kvcaenvdC+c5e9bJ7YovaNS/rR917RQy1AXXo+p/l4uFlH2bEq0sG1PKVOT5Qh+ZgscmDLDyTwl9R4jIKOz4/zUCEB+HxjnEddlHtbWPOYLnQyHpNuw7BruK7uuhC2BY4BMTR5usHKgU9jNPaRqLVyEZrHI1zdXmG+9bRxDkuriIWayMzdyeg6/+TYzvCqLtIS5ib16miKPq9bJM9Qzn9Fz2hAVM1JzbQgTM+zDHyUKsFZdP65ZqyiuEjE6sWwnPUca+3XhOTNogYNfSlmADWnExJRTngMLNp29NO4ifanES4Aq0YAQ==",
+          "thinking": "I should do a peer comparison here, adjusting for cause mix and state differences, then calculate each shop's ratio against the expected cause-state baseline, both overall and individually.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01RWF5PpbEWNq6WbS4H9wfi3",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_inc, round(avg(exp)) expected, round(avg(inc)/avg(exp),2) ratio, round((select avg(inc) from cl)) overall from e group by 1 order by ratio desc limit 6"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01RWF5PpbEWNq6WbS4H9wfi3",
+          "content": "{\"columns\": [\"repair_shop_id\", \"n\", \"avg_inc\", \"expected\", \"ratio\", \"overall\"], \"rows\": [[\"RS-041\", 79, 5774.0, 4132.0, 1.4, 4229.0], [\"RS-029\", 23, 3595.0, 2712.0, 1.33, 4229.0], [\"RS-014\", 86, 5120.0, 4504.0, 1.14, 4229.0], [\"RS-004\", 170, 5092.0, 4590.0, 1.11, 4229.0], [\"RS-026\", 56, 4581.0, 4128.0, 1.11, 4229.0], [\"RS-019\", 67, 4543.0, 4143.0, 1.1, 4229.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS7gUKEAgSGAI4AUIIdGhpbmtpbmcSDJjVd9gAM9zIYf/GCxoMwF8HHhsNgyvxC6hoIjBSgqTV+MS9129GohpCTXNzWjfRN68slGpr5kf/BJ3LtDhr2TrkG2x26NbIThUl3B8qiwUk+2F+wZpgE1hxeXRhb1yavW+0BYjtoR2PzOifTt/dc99f5ObRuFmq5mQlazQ98iQ522tZ+ekUjZdSO2uUWmR/NRJe1pDb+4Pum2yJ0dEJfHKOr+gDTScjZl3VmP/rzPSzQxMqqzCXMSEuGeXGnPkPZemXGvx/jeeIfJ3aNSIdAHug1cUkuwc++PQJE5v5OIlp/AiLo+w2wJEZ6if6Scf3jIzfaJuhRQQgO2nklj03MFz8Rj9RZ7ZB6gGKCTXeMc/N+cxd5v6A84O60dkTIsZ8JWW/RTxYzHq8X2Gb/8c+dHV4mE0oYCHZIRKHDfC4Un5n15XEVQiS/yK/x4n7hnEuOMQ9QTgh/iOMlR8SG+EfNzqqpVU51bDJs5aAy0xHSRBRygoNH60HEtk5WP0UofkfweemeI5Ve703sKkWS80gwIJQ/Otl2xHRrNXKVNFPFzq+6b4w0NUvpy9B4JlVJt49EQNPqTKOvuQEDoaa1ZZdbOBRpTZoeI9Dl15eiz7S7FeQpBs5lX1BTuilak8c78TTmv0exUoOKbQAIOrrP4SPQyrvEB9fT2mgDCUJSd57QmlZZL3FnLTv54eMR5MUfAND0IT3fFZ+LEzMJVUSedUZht+Yb4T+S7AgtbssFBTGrnvgJHCeZmhfNeTDq6G2uKzU5SUkg2mCGmx0V8NxaPGI8U40C7Lc9SRzLEd8kJ95FkthzTiudZeL/c1M773Vx9zGUM6Rt/exir/z0DyiYpB6fLHRZ/lsoHihTFWB280VX7iWm7DMnVSjD9+6Tir85td4BvXGtiCckKvLzUd14/yKbop9TWssDBYIEkI4eSevZhEhCvJ4XGchxSh0LILTotIj0fNwtf5wYr4KVccYAQ==",
+          "thinking": "RS-041 catches my attention, so I want to dig into the adjusters involved, the timing, the channel used, and what caused it.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01UMBMRXmcCkya7tQJLJFC1h",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.*, p.channel, coalesce(pa.paid,0)+c.reserve_amount inc from claims c join policies p using(policy_id) left join pay pa using(claim_id) where repair_shop_id='RS-041') select 'adjuster' k, adjuster_id v, count(*) n, round(avg(inc)) a from cl group by 2 union all select 'channel',channel,count(*),round(avg(inc)) from cl group by 2 union all select 'cause',cause,count(*),round(avg(inc)) from cl group by 2 union all select 'quarter',cast(date_trunc('quarter',loss_date) as varchar),count(*),round(avg(inc)) from cl group by 2 order by 1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01UMBMRXmcCkya7tQJLJFC1h",
+          "content": "{\"columns\": [\"k\", \"v\", \"n\", \"a\"], \"rows\": [[\"adjuster\", \"ADJ-022\", 9, 3725.0], [\"adjuster\", \"ADJ-023\", 9, 2852.0], [\"adjuster\", \"ADJ-024\", 37, 6820.0], [\"adjuster\", \"ADJ-025\", 7, 8534.0], [\"adjuster\", \"ADJ-026\", 4, 3909.0], [\"adjuster\", \"ADJ-027\", 4, 3954.0], [\"adjuster\", \"ADJ-028\", 9, 5937.0], [\"cause\", \"collision\", 62, 6935.0], [\"cause\", \"glass\", 14, 864.0], [\"cause\", \"hail\", 3, 4689.0], [\"channel\", \"agent\", 47, 6318.0], [\"channel\", \"direct\", 19, 5897.0], [\"channel\", \"online\", 13, 3628.0], [\"quarter\", \"2025-01-01 00:00:00\", 6, 3116.0], [\"quarter\", \"2025-04-01 00:00:00\", 10, 4581.0], [\"quarter\", \"2025-07-01 00:00:00\", 6, 3626.0], [\"quarter\", \"2025-10-01 00:00:00\", 7, 5496.0], [\"quarter\", \"2026-01-01 00:00:00\", 16, 6432.0], [\"quarter\", \"2026-04-01 00:00:00\", 20, 5102.0], [\"quarter\", \"2026-07-01 00:00:00\", 14, 9032.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSyAYKEAgSGAI4AUIIdGhpbmtpbmcSDC9KHO8MVmk93uAKnBoM2e8EsjgSSgP4UQlEIjC1ASUKiJoxn3jqUNrs/2CH03gN2JUUIH6GwUp9N/VTD8QTaZAKEGyJaJAYjNqpENcq5QVykVGq+Pz9dTdgaCczFOHuSh3yKnyf1PXIThAKRKrdb2PrYQvIjchFG6P6MjzApVjbW7yx2gGHbHDUm95pGpJYvesk3XBhPWuqD+K86/v0r0VjSHrCuHCPbcvORmlEg2nTdKz/aiISA78qsi54/jVoA5KJaY7kOP4yE+QHSdTuvTVUe18l4II+UnjGNvn62IRo5eGmtsAcSV+BvTQ/jh4GexAzDCMQ3kRjPjdXpH6l4xjI258N8LLlYfi7CDnSEEksYFRFnnQnItBu7Dovp1zJwaoHVQZkBRFoVCeOxPxKcyuz9YnyIF6oMSTHF3VnSMpUQBsuQEzwgOCsbINByQg1f2Hl7iysPVWHf7irxl3HsWByYxtlbA2/Ir8CdIW96Wn/CbtvnpgkQCDxxYK9WGAjBx2SVtfbLHV8KSryqi5NhKTqgwkl5fU9sIQDERMHe0+vulFDnbHIrT5klGApBXDxiot9JU9L1ZPcxtaYwkbFzGP1FbGjj26mHcoMC1QgvWvfzJ3a2k7LQ06/+VmsmBSUVseHhBY5qbROkTboLtOaqD/AiKTu5y7qBGpXgMIV9K881dDnwSMPpeXaJPGwYoTn/433TUXy4LsebO2+QZsA96xqmjNMAy+09u9IGI7JDo5NecHOZ1gUJfzK6L5PfYPZ2uoL4zGUM60ynss7ycRg18WdKaw5xldk8iNtXF88bcDtkdbWKx1IXchRGQoA6lDddnylwVwq/zfOHjgvyev7E6dWeacECGe78r36amqeEAHbphleAr4JwdoSREldMMYmvBP7+m9kZuznhiFtDwd9HpkYdP1zHMI0TDZS5+j98NWEHwMlmtx+u4k0uYrZbuuZdjrKwBYayXcoCAErgOp6ZfVNr3rivWc+HppIXWx28FthAY/yHdcJUUnWH5Zy4b1oEVCm7Y0clW9todu6u2tx/MAotWkJ/0RVtKelzKV/2r68yPEUD2XJ0x1wawMuZUU9ISCCPrYYAQ==",
+          "thinking": "ADJ-024 handles 37 of 79 claims, 47%, averaging 6820 \u2014 I want to check how this adjuster's share compares across other shops in one more query.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_015aaZgjZ8vrRv8sXKJQdfwb",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select c.repair_shop_id='RS-041' at_shop, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc, min(loss_date) f, max(loss_date) l from claims c left join pay pa using(claim_id) where adjuster_id='ADJ-024' and cause='collision' group by 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Tz4Fm4t6crriQAvVFRz6b4",
+          "input": {
+            "sql": "select a.full_name,a.region,a.team,a.hire_date,a.leave_date from adjusters a where adjuster_id='ADJ-024'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_015aaZgjZ8vrRv8sXKJQdfwb",
+          "content": "{\"columns\": [\"at_shop\", \"n\", \"avg_inc\", \"f\", \"l\"], \"rows\": [[false, 122, 4809.0, \"2025-01-01\", \"2026-09-04\"], [true, 29, 8230.0, \"2025-04-22\", \"2026-09-22\"]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Tz4Fm4t6crriQAvVFRz6b4",
+          "content": "{\"columns\": [\"full_name\", \"region\", \"team\", \"hire_date\", \"leave_date\"], \"rows\": [[\"Adam Sanchez\", \"North\", \"North claims\", \"2021-12-12\", null]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VZWts6XUCXws42QxxWSir6",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VZWts6XUCXws42QxxWSir6",
+          "content": "{\"columns\": [\"repair_shop_id\", \"n\", \"avg_incurred\", \"expected_same_cause_state\", \"ratio\"], \"rows\": [[\"RS-041\", 79, 5774.0, 4132.0, 1.4], [\"RS-029\", 23, 3595.0, 2712.0, 1.33], [\"RS-014\", 86, 5120.0, 4504.0, 1.14]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01QgRzRJNm5vXSSVEQCb9czB",
+          "input": {
+            "sql": "select count(*) from claims where repair_shop_id='RS-041'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01QgRzRJNm5vXSSVEQCb9czB",
+          "content": "{\"columns\": [\"count_star()\"], \"rows\": [[79]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01SUq3DMpbUuV26XoJJe2P1m",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select adjuster_id='ADJ-024' is_adj024, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where repair_shop_id='RS-041' group by 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01SUq3DMpbUuV26XoJJe2P1m",
+          "content": "{\"columns\": [\"is_adj024\", \"n\", \"avg_inc\"], \"rows\": [[false, 42, 4853.0], [true, 37, 6820.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01KDss33dFXB6FC4oeJKikBP",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01KDss33dFXB6FC4oeJKikBP",
+          "content": "{\"columns\": [\"repair_shop_id\", \"n\", \"avg_incurred\", \"expected_same_cause_state\", \"ratio\"], \"rows\": [[\"RS-041\", 79, 5774.0, 4132.0, 1.4]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01DYxoepVS4NPa3xrcujkTkm",
+          "input": {
+            "sql": "select 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DYxoepVS4NPa3xrcujkTkm",
+          "content": "{\"columns\": [\"1\"], \"rows\": [[1]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"I compared repair shops on average incurred cost per claim (paid plus reserve) for auto claims that have a repair shop: collision, glass and hail. Payments were de-duplicated first. To control for claim mix, I compared each shop with the average for the same cause and state. The period is all loss dates from 2025-01-01 to 2026-09-30.\",\"answer\":\"Yes. RS-041 Campbell Body Works (non-preferred, Chicago, IL) is the clearest outlier. Its 79 claims average $5,774 incurred. That is about 1.40 times the average for the same cause and state ($4,132), and the highest ratio of any shop. The next shop, RS-029, has only 23 claims and a ratio of 1.33. Other shops are at or below about 1.14. The excess is concentrated in one adjuster: ADJ-024 (Adam Sanchez, North region) handles 37 of the 79 RS-041 claims, 47%, and those average $6,820. The other 42 RS-041 claims average $4,853. ADJ-024's collision claims at other shops average $4,809, against $8,230 at RS-041. The pattern is spread across the period, and the average rose to $9,032 for claims with loss dates in 2026 Q3. This is evidence for review, not a finding of wrongdoing.\",\"answer_sql\":\"with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1\",\"findings\":[{\"claim\":\"RS-041 has the highest mix-adjusted cost ratio of any shop.\",\"evidence_sql\":\"with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1), cl as (select c.repair_shop_id,c.cause,c.state,coalesce(p.paid,0)+c.reserve_amount inc from claims c left join pay p using(claim_id) where c.repair_shop_id is not null), e as (select *, avg(inc) over (partition by cause,state) exp from cl) select repair_shop_id, count(*) n, round(avg(inc)) avg_incurred, round(avg(exp)) expected_same_cause_state, round(avg(inc)/avg(exp),2) ratio from e group by 1 order by ratio desc limit 1\",\"key_numbers\":[{\"label\":\"RS-041 average incurred\",\"value\":5774,\"unit\":\"USD\"},{\"label\":\"Expected for same cause and state\",\"value\":4132,\"unit\":\"USD\"},{\"label\":\"Ratio\",\"value\":1.4,\"unit\":\"x\"},{\"label\":\"Claims\",\"value\":79,\"unit\":\"claims\"}],\"confidence\":\"high\"},{\"claim\":\"Adjuster ADJ-024 handles 37 of the 79 RS-041 claims, and those claims cost more than the shop's other claims.\",\"evidence_sql\":\"with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select adjuster_id='ADJ-024' is_adj024, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where repair_shop_id='RS-041' group by 1\",\"key_numbers\":[{\"label\":\"ADJ-024 claims at RS-041\",\"value\":37,\"unit\":\"claims\"},{\"label\":\"ADJ-024 average at RS-041\",\"value\":6820,\"unit\":\"USD\"},{\"label\":\"Other adjusters' average at RS-041\",\"value\":4853,\"unit\":\"USD\"}],\"confidence\":\"medium\"},{\"claim\":\"ADJ-024's collision claims at RS-041 cost much more than their collision claims elsewhere.\",\"evidence_sql\":\"with pay as (select claim_id, sum(amount) paid from (select distinct claim_id,payment_date,amount,payee_type from claim_payments) group by 1) select c.repair_shop_id='RS-041' at_shop, count(*) n, round(avg(coalesce(pa.paid,0)+c.reserve_amount)) avg_inc from claims c left join pay pa using(claim_id) where adjuster_id='ADJ-024' and cause='collision' group by 1\",\"key_numbers\":[{\"label\":\"ADJ-024 collision average at RS-041\",\"value\":8230,\"unit\":\"USD\"},{\"label\":\"ADJ-024 collision average at other shops\",\"value\":4809,\"unit\":\"USD\"}],\"confidence\":\"medium\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 claim_payments rows were reloaded in batch reload-2026-03-14 and duplicate existing payments.\",\"impact\":\"I removed exact duplicates before computing costs. Without that step, shop costs are overstated.\"},{\"issue\":\"Recent claims are still developing, and reserves are estimates.\",\"impact\":\"Incurred amounts for recent months may change. The Q3 2026 figure for RS-041 rests on only 14 claims.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Review RS-041 Campbell Body Works claims handled by ADJ-024\",\"reason\":\"RS-041 averages 1.4 times the expected cost, and about half its claims go through one adjuster at roughly 70% above that adjuster's other collision claims. A person should check estimates, invoices and the adjuster-shop relationship.\"}],\"open_questions\":[\"Do you want the review extended to non-collision claims or to the home-claims contractor payees?\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

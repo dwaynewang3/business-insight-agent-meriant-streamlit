@@ -1,0 +1,310 @@
+{
+  "case_id": "what-loss-ratio-by-product-2025",
+  "question": "What was the loss ratio for each product in 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "interpretation": "Loss ratio = incurred (paid + current reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and used earned premium from exposure_monthly for Jan\u2013Dec 2025, by product. I excluded 159 duplicate payment rows from the 'reload-2026-03-14' batch.",
+    "answer": "2025 loss ratios were 53.6% for auto and 54.3% for home. Auto had about $15.96M incurred on $29.77M earned premium. Home had about $13.02M incurred on $23.99M earned premium. Late-reported and slow-settling claims (bodily injury and liability) may still develop, so these ratios could rise.",
+    "answer_sql": "with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1), inc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1), ep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1) select product, round(incurred/ep,4) loss_ratio from inc join ep using(product) order by product",
+    "findings": [
+      {
+        "claim": "Auto and home 2025 loss ratios are close, at 53.6% and 54.3%.",
+        "evidence_sql": "with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1), inc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1), ep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1) select product, round(incurred,2) incurred, round(ep,2) earned_premium, round(incurred/ep,4) loss_ratio from inc join ep using(product)",
+        "key_numbers": [
+          {
+            "label": "Auto loss ratio",
+            "value": 0.5362,
+            "unit": "ratio"
+          },
+          {
+            "label": "Home loss ratio",
+            "value": 0.5428,
+            "unit": "ratio"
+          },
+          {
+            "label": "Auto incurred",
+            "value": 15960031.87,
+            "unit": "USD"
+          },
+          {
+            "label": "Home incurred",
+            "value": 13020747.97,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows (about $893K in total) were loaded a second time in batch 'reload-2026-03-14'. They duplicate existing nightly payments.",
+        "impact": "Including them would overstate 2025 incurred by about $159K. I excluded them."
+      },
+      {
+        "issue": "Claims from 2025 may not be fully developed. Bodily injury and liability claims are reported late and settle slowly, and reserves are estimates.",
+        "impact": "2025 loss ratios may change as claims develop."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payments from reload-2026-03-14 batch",
+        "reason": "159 payment rows duplicate payments already loaded in nightly batches, which inflates paid amounts."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.03156,
+  "seconds": 26.39,
+  "tool_calls": [
+    {
+      "tool": "run_sql",
+      "purpose": "Check payment duplicates",
+      "sql": "select count(*) n, count(distinct payment_id) dp, (select count(*) from (select claim_id,payment_date,amount,payee_type from claim_payments group by all having count(*)>1)) dupgroups, (select count(*) from claim_payments where load_batch not like 'nightly-%') nonnightly, (select count(*) from claim_payments where amount<=0) nonpos, (select count(*) from claim_payments p left join claims c using(claim_id) where c.claim_id is null) orphans, (select count(*) from (select claim_id from claims group by 1 having count(*)>1)) dupclaims from claim_payments",
+      "rows": 1,
+      "truncated": false,
+      "seconds": 0.018
+    },
+    {
+      "tool": "run_sql",
+      "purpose": "Inspect load batches",
+      "sql": "select load_batch, count(*) n, sum(amount) from claim_payments where load_batch not like 'nightly-%' or load_batch in (select load_batch from claim_payments group by 1 having count(*)>1000) group by 1 order by n desc limit 20",
+      "rows": 1,
+      "truncated": false,
+      "seconds": 0.012
+    },
+    {
+      "tool": "run_sql",
+      "purpose": "Loss ratio by product 2025",
+      "sql": "with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1),\ninc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1),\nep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1)\nselect product, round(incurred,2) incurred, round(ep,2) earned_premium, round(incurred/ep,4) loss_ratio from inc join ep using(product) order by product",
+      "rows": 2,
+      "truncated": false,
+      "seconds": 0.017
+    },
+    {
+      "tool": "run_sql",
+      "purpose": "Size of duplicate impact in 2025",
+      "sql": "select round(sum(amount),2) from claim_payments p join claims c using(claim_id) where load_batch like 'reload-%' and c.loss_date between '2025-01-01' and '2025-12-31'",
+      "rows": 1,
+      "truncated": false,
+      "seconds": 0.016
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-75d04691f74d",
+      "run_id": "r-4da085cf3e74",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 519,
+      "cache_read_input_tokens": 6088,
+      "cache_creation_input_tokens": 163,
+      "cost_usd": 0.006823,
+      "seconds": 4.57,
+      "request_id": "req_011CfpvrqHTrPRRLmRRVhLGJ"
+    },
+    {
+      "session_id": "s-75d04691f74d",
+      "run_id": "r-4da085cf3e74",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 407,
+      "cache_read_input_tokens": 6251,
+      "cache_creation_input_tokens": 718,
+      "cost_usd": 0.007119,
+      "seconds": 10.49,
+      "request_id": "req_011CfpvsAqTNSrgoQAg4TEje"
+    },
+    {
+      "session_id": "s-75d04691f74d",
+      "run_id": "r-4da085cf3e74",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 150,
+      "cache_read_input_tokens": 6969,
+      "cache_creation_input_tokens": 503,
+      "cost_usd": 0.004155,
+      "seconds": 3.56,
+      "request_id": "req_011CfpvswpAP5G5SCsMb12cj"
+    },
+    {
+      "session_id": "s-75d04691f74d",
+      "run_id": "r-4da085cf3e74",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1148,
+      "cache_read_input_tokens": 7472,
+      "cache_creation_input_tokens": 194,
+      "cost_usd": 0.013463,
+      "seconds": 7.69,
+      "request_id": "req_011CfpvtD2x3hu7eGqPS3PFQ"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "session_id": "s-75d04691f74d",
+  "run_id": "r-4da085cf3e74",
+  "agent_version": "0.1.0+57629b5499",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the loss ratio for each product in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSjgYKEAgSGAI4AUIIdGhpbmtpbmcSDDc8mLi8ZSgJGUTzfBoMVEQMhKgtu/DPmSPkIjDwZ4IO2c2EEHLROwvpesw5zWOzcLugVl1rL0IvUMyw2aR/s9JeIAfaj3nKxrXuj2kqqwV7jURNkLkZxoECLP2uCSCAFG+2niwNB0PHoMQfKAnDg93pDIRKKQ2dCMbsI5ciA0enthPVlBEhUDAGTTtK9vXu9hM1JumnJ4Su/X0F0K3uaHaojTxFScwuXNGDK5OZ5IG9qp7EPYX2T7R6Vt0Z06lNQ5d+xZkFwWr8YRflS3AW8T06OqB0nXP0OjUXKavDhM1atJ53yrK98DLwRYRhldsk4LZjn81iHnH+nx7gRHdufz9eR6zR5ESFvCRGmatk1/NVKEhYIwBJAJ6QnfNQVOckJyG9IEObErgYW7JdcIci0MqvNNtgE7CrLpq2Pp4q40EuTQIaDzDBAD9fZ8sOKJrZ9T1HHmPjM8tZdWEvGseb4q4A9AaqKV34RZcQ2jcLjtq7HyYS5iQiC6omGAuKnqIHlE8EjXd1umqwIqn5d9M3E9RRMT2+2FrP0uDeuidHgZOGCou2gDCMgJ63fWOwK8VrNacsEwYewfkyQMuuAZFlWdei9Zq2zgWNAYvq3Ht6Pzm0HM8qosvE8NUbeLsKZjbM7Bgd9WaaDtT/D6nFegTM7j6ewkbw9G9cAnx0T3Wumap75RcrxuMLUHKgtTE3cGDhnv9Le0J6Pc105bmq3opFYID4xu67+6WAGYzN5o198RTl0r0XP1oNNivE/Sj0b2dAEMPkUzSUmzJZx5vBc814e4aDMnQ6QzDsrls/xFJZPhWAn4n8R1GTn37s09ynyXIK9UKQ1OkeEcTbGnxDCROsU+mV1/alQJ1TIVj04ya1uybilMsqq50CdWj+6f8sXDDDtZmHPV1A1+n1Bdsw2TXkqC1NMhTaDYKf0qjQpjDLM4NmG3L6IwLHgHTpufcDPdO1gmmr+yAzxQTk9es+A5IqlLTz8Cz4X2Mz3Odnq69QgWF3xZT5pp2hXg/ctRgB",
+          "thinking": "I need to compute loss ratio per product for 2025, dividing incurred amounts (paid plus reserve) for claims with 2025 loss dates by earned premium for that year, while also checking for duplicate payments from load_batch. Let me query the data to work this out.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01VzsrEvN2QEjjsSAoyTGRYW",
+          "input": {
+            "sql": "select count(*) n, count(distinct payment_id) dp, (select count(*) from (select claim_id,payment_date,amount,payee_type from claim_payments group by all having count(*)>1)) dupgroups, (select count(*) from claim_payments where load_batch not like 'nightly-%') nonnightly, (select count(*) from claim_payments where amount<=0) nonpos, (select count(*) from claim_payments p left join claims c using(claim_id) where c.claim_id is null) orphans, (select count(*) from (select claim_id from claims group by 1 having count(*)>1)) dupclaims from claim_payments",
+            "purpose": "Check payment duplicates"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01DNgKqvkj145HCKokE4S4xp",
+          "input": {
+            "sql": "select load_batch, count(*) n, sum(amount) from claim_payments where load_batch not like 'nightly-%' or load_batch in (select load_batch from claim_payments group by 1 having count(*)>1000) group by 1 order by n desc limit 20",
+            "purpose": "Inspect load batches"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VzsrEvN2QEjjsSAoyTGRYW",
+          "content": "{\"columns\": [\"n\", \"dp\", \"dupgroups\", \"nonnightly\", \"nonpos\", \"orphans\", \"dupclaims\"], \"rows\": [[9349, 9349, 159, 159, 0, 0, 0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DNgKqvkj145HCKokE4S4xp",
+          "content": "{\"columns\": [\"load_batch\", \"n\", \"sum(amount)\"], \"rows\": [[\"reload-2026-03-14\", 159, 892998.75]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS9QYKEAgSGAI4AUIIdGhpbmtpbmcSDO2S8+Yu8IU5MITCEBoMIVqaQ45pERzLmki7IjB5EABtiw5zFtJkFxoPWf+AHlXri5cptmoaYyywZdoQuZXHft/lFIOeDFDnoOs9mt0qkgZ575lWD95xR9ht2lwJZy3FO2kic9tuDuzYlqQuN4I6RuUKkOMB3bWrawkH2TnOonqTL3C2b0+JjIMrYA/RM40wKl//4PsjlFD/6dGq7j57hHH0OV9GDGPSOYg0g4Q5HMacQToUqCnbJICfu0kChrCLbGNXJkJakx1rPolTOfdMGfiMr+IkFUf0jR+qvIdSGnR+eS15Pb7Kb3XGfJHB89ziFvSCBVizGdEfMYpcRWu/N+ioloE6YovCH0xf8taYSzGeDz4gY5Mrc5Vo/ftrt0DrFfN+muGnx0+oPYhtcInATDBrE4VpObZeR0LQW1K4LSgj29iVQCfMqtrLt6a99uhrq8DSxPwe2I0sfGsrBVuebsTDK+hNumDM72Xx9/gTpppOswH1z+UCrKOlrxQ7NyfQ0j2YMRCTIaQJ5d1kfGYmfNmZHCO2opBaHXzKAfvCWA2ygbsySdSpLzgtewI4OAM8TPRjrOve0ONlG9psXQK1v0OLzkzTRgx+skJCji0FhUXODhFEYUAUVo/I9qNlbhgrOtcj9bF1QCwl2IprdlO4YENS/+G62Ykqj7RGt0YptZzRjZ24hFhGMu+16XaHEVRvaIaFhBOPwaApb9bgEqj2w648ZmUZqlCPmpjUS8azpCqgdmox6MuADNMS62z0vE9nf1Dtcy0BR1V3xwBSbtU4RZZGbN95Gk1bsj60Y6cd9jtllJlYBCO9F29kVhcEztbPp0VpYG/jiK27sQIrFJbXCV4JJXUjLYxPs5GVvXbcUERGJBCUc3Gy19/LCxUP8hPpbKAYqrQCKvWHSsvtrWyP80nsxXua39k/pnaIMt90TOpNStHN0y8ZuQ8u2aRlQjTPglOzZTdmHu2GgCN9aXVzSPh/NrR7eEpD6kbHLTqcySGDnqmdWvG0nGw9P8Nf/JklJYzilK0T5smu1K7WDMY6pgA6sQoqHXr6T6dLuWvX8wSbpDlc1A5hoio+Ac/PVPZnDJ3JdorGS+MfY/HpATwLd0GqW1Nt3NzZecS2+CYh8KkdFnaf/vuk8cs1r10wErMOeRYYAQ==",
+          "thinking": "I see 159 reload rows duplicating existing nightly ones, confirmed by matching group counts, so I'll dedupe by excluding the reload batch and recompute using the original rows.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01JqWnCekVBMGnQobXADSoYU",
+          "input": {
+            "sql": "with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1),\ninc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1),\nep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1)\nselect product, round(incurred,2) incurred, round(ep,2) earned_premium, round(incurred/ep,4) loss_ratio from inc join ep using(product) order by product",
+            "purpose": "Loss ratio by product 2025"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JqWnCekVBMGnQobXADSoYU",
+          "content": "{\"columns\": [\"product\", \"incurred\", \"earned_premium\", \"loss_ratio\"], \"rows\": [[\"auto\", 15960031.87, 29767306.75, 0.5362], [\"home\", 13020747.97, 23988663.54, 0.5428]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Y2oUYeadAfCUhLwrXuf7QY",
+          "input": {
+            "sql": "select round(sum(amount),2) from claim_payments p join claims c using(claim_id) where load_batch like 'reload-%' and c.loss_date between '2025-01-01' and '2025-12-31'",
+            "purpose": "Size of duplicate impact in 2025"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Y2oUYeadAfCUhLwrXuf7QY",
+          "content": "{\"columns\": [\"round(sum(amount), 2)\"], \"rows\": [[159397.21]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"interpretation\":\"Loss ratio = incurred (paid + current reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and used earned premium from exposure_monthly for Jan\u2013Dec 2025, by product. I excluded 159 duplicate payment rows from the 'reload-2026-03-14' batch.\",\"answer\":\"2025 loss ratios were 53.6% for auto and 54.3% for home. Auto had about $15.96M incurred on $29.77M earned premium. Home had about $13.02M incurred on $23.99M earned premium. Late-reported and slow-settling claims (bodily injury and liability) may still develop, so these ratios could rise.\",\"answer_sql\":\"with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1), inc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1), ep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1) select product, round(incurred/ep,4) loss_ratio from inc join ep using(product) order by product\",\"findings\":[{\"claim\":\"Auto and home 2025 loss ratios are close, at 53.6% and 54.3%.\",\"evidence_sql\":\"with pay as (select claim_id, sum(amount) paid from claim_payments where load_batch not like 'reload-%' group by 1), inc as (select c.product, sum(coalesce(p.paid,0)+c.reserve_amount) incurred from claims c left join pay p using(claim_id) where c.loss_date between '2025-01-01' and '2025-12-31' group by 1), ep as (select product, sum(earned_premium) ep from exposure_monthly where month between '2025-01-01' and '2025-12-01' group by 1) select product, round(incurred,2) incurred, round(ep,2) earned_premium, round(incurred/ep,4) loss_ratio from inc join ep using(product)\",\"key_numbers\":[{\"label\":\"Auto loss ratio\",\"value\":0.5362,\"unit\":\"ratio\"},{\"label\":\"Home loss ratio\",\"value\":0.5428,\"unit\":\"ratio\"},{\"label\":\"Auto incurred\",\"value\":15960031.87,\"unit\":\"USD\"},{\"label\":\"Home incurred\",\"value\":13020747.97,\"unit\":\"USD\"}],\"confidence\":\"medium\"}],\"data_quality_issues\":[{\"issue\":\"159 payment rows (about $893K in total) were loaded a second time in batch 'reload-2026-03-14'. They duplicate existing nightly payments.\",\"impact\":\"Including them would overstate 2025 incurred by about $159K. I excluded them.\"},{\"issue\":\"Claims from 2025 may not be fully developed. Bodily injury and liability claims are reported late and settle slowly, and reserves are estimates.\",\"impact\":\"2025 loss ratios may change as claims develop.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payments from reload-2026-03-14 batch\",\"reason\":\"159 payment rows duplicate payments already loaded in nightly batches, which inflates paid amounts.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

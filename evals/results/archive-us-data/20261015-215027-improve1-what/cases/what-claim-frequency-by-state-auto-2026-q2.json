@@ -1,0 +1,303 @@
+{
+  "case_id": "what-claim-frequency-by-state-auto-2026-q2",
+  "repeat": 1,
+  "question": "What was the auto claim frequency by state in Q2 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Auto claim frequency is claims per 1,000 policies in force per month. It is the company metric: 1000 \u00d7 claims by loss date \u00f7 policy-months. The period is Q2 2026 (2026-04-01 to 2026-06-30), by policy state. Q2 ended three months before the extract date, so late reporting has little effect. Bodily injury claims report latest, so a few may still be missing.",
+    "answer": "Auto claim frequency in Q2 2026, in claims per 1,000 policies per month, was highest in NY (8.24) and GA (8.07). Next were TX (7.52), CA (7.24), FL (6.95) and IL (6.89). The lowest were NC (5.92) and OH (5.34).",
+    "answer_sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+    "findings": [
+      {
+        "claim": "Auto claim frequency by state, Q2 2026, ranges from 5.34 (OH) to 8.24 (NY) claims per 1,000 policies per month.",
+        "evidence_sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+        "key_numbers": [
+          {
+            "label": "NY",
+            "value": 8.24,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "GA",
+            "value": 8.07,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "TX",
+            "value": 7.52,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "CA",
+            "value": 7.24,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "FL",
+            "value": 6.95,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "IL",
+            "value": 6.89,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "NC",
+            "value": 5.92,
+            "unit": "per 1,000/month"
+          },
+          {
+            "label": "OH",
+            "value": 5.34,
+            "unit": "per 1,000/month"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [],
+    "charts": [
+      {
+        "title": "Auto claim frequency by state, Q2 2026",
+        "sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+        "type": "bar",
+        "x": "state",
+        "y": "frequency"
+      }
+    ],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.046602,
+  "seconds": 12.86,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_frequency",
+        "dimensions": [
+          "state"
+        ],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "auto"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT state, count(*) AS value\n    FROM source\n    WHERE loss_date >= DATE '2026-04-01'\n      AND loss_date <= DATE '2026-06-30'\n      AND product IN ('auto')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT state, sum(policies_in_force) AS value\n    FROM source\n    WHERE month >= DATE '2026-04-01'\n      AND month <= DATE '2026-06-30'\n      AND product IN ('auto')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (state)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_frequency"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+      },
+      "source": "custom_query",
+      "sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state",
+      "rows": 8,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-9adbbac187db",
+      "run_id": "r-167836378b10",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 245,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 8255,
+      "cost_usd": 0.023096,
+      "seconds": 2.94,
+      "request_id": "req_011Cg3touNGZo9pTdz1JFdRn"
+    },
+    {
+      "session_id": "s-9adbbac187db",
+      "run_id": "r-167836378b10",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 311,
+      "cache_read_input_tokens": 8255,
+      "cache_creation_input_tokens": 1154,
+      "cost_usd": 0.00765,
+      "seconds": 2.63,
+      "request_id": "req_011Cg3tp7ps7UniuvwSpC9vn"
+    },
+    {
+      "session_id": "s-9adbbac187db",
+      "run_id": "r-167836378b10",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1289,
+      "cache_read_input_tokens": 9409,
+      "cache_creation_input_tokens": 432,
+      "cost_usd": 0.015856,
+      "seconds": 6.99,
+      "request_id": "req_011Cg3tpKExibUtBcWw8o9A7"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-9adbbac187db",
+  "run_id": "r-167836378b10",
+  "numbers": {
+    "checked": 8,
+    "confirmed": 8,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the auto claim frequency by state in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Bpkob5yfS8xPG2hJ9SKBLG",
+          "input": {
+            "metric": "claim_frequency",
+            "dimensions": [
+              "state"
+            ],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "auto"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_0195PTGH3Uh413twQbvrBWz6",
+          "input": {
+            "name": "claim_frequency"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Bpkob5yfS8xPG2hJ9SKBLG",
+          "content": "{\"metric\": \"claim_frequency\", \"label\": \"Claim frequency\", \"unit\": \"claims per 1,000 policies per month\", \"definition\": \"1000 * claim_count / policy_months\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT state, count(*) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2026-04-01'\\n      AND loss_date <= DATE '2026-06-30'\\n      AND product IN ('auto')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT state, sum(policies_in_force) AS value\\n    FROM source\\n    WHERE month >= DATE '2026-04-01'\\n      AND month <= DATE '2026-06-30'\\n      AND product IN ('auto')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT state, 1000 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (state)\\nORDER BY ALL\", \"columns\": [\"state\", \"value\"], \"rows\": [[\"CA\", 7.2422273408812075], [\"FL\", 6.9546421436924994], [\"GA\", 8.06659394692422], [\"IL\", 6.8920741147680165], [\"NC\", 5.923958416567245], [\"NY\", 8.240589077945813], [\"OH\", 5.341517725492728], [\"TX\", 7.524569354719105]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0195PTGH3Uh413twQbvrBWz6",
+          "content": "{\"name\": \"claim_frequency\", \"label\": \"Claim frequency\", \"description\": \"Claims per 1,000 policies in force, per month.\", \"unit\": \"claims per 1,000 policies per month\", \"dimensions\": [\"state\", \"region\", \"product\"], \"definition\": \"1000 * claim_count / policy_months\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS4gUKEAgSGAI4AUIIdGhpbmtpbmcSDG4JRhhEoDQOu7gjXhoMDy+thIvnvKyvJijgIjAr+A+oEVPdam7AjFJ21PCn7rStlwenVrrRouwVVpy96YMShYVEh1g+GwX6DW4tG2kq/wRFU2cFKTSY8vFjtl9Rr4RcA2ER6zeCD9XrY2DXOmgzbZHbU0Kyw6UOLmGB54N/pwXCAJx17YuiNRml0P80bilnKAG5heRaccYebTgk6nQaDP8lU5Ln8jK1zbQp6BpSIj+Vek4b0td3n3MWzlrXpXnuhjrIrLn1FP/tKckbpLR93RYbKgkC3LVdwt4DKBbvYCZohuBBWnEeDF+JpCgyBUt964sp9vuE8HlD2dil2FD2sNN1VXfRZlOJpLtpV2wUUtNsUptPBuGA8wIdZHJxagwPxkJscerDAFL2a+adWZXMyngxjQiyZ2MkjD//QT6IU4S9h7Oxl5B5pR80QxAYxrLLT9OTVBDKTpQseBAwLX+FeFriHYUbxZqpI+H9r7tFO7vAG12Hu5po/wyuJaDOuH1O21dGCb8wEmuPW3nBUZSxSVEBVbr4YoJHvPe/aejasVeAYXnh6hNWv46ESIYZ1BhZqCUQTAXxyDzmIGllfeMRSNwcs2hmQs52TApGUnovSI+7CyT+5Vz/5kzu0+iI7c6+VJ4ZcdTFi1inCJqB0k59xhnOZtu7XI0gBJtKS/ddanLaT5sbM1hDIhsycpZrcC6a3651x5JDjBWt79ZPQIJmoOFN7OnUMezSl+worxaRYquDO5M7kQsu+vMgMZrfCH3+qxEdaEDPsnyQ1F+D+Td5mTHeOgbZq64P2UAE1AlE5VKHdN1NJVaZWLoNzhwI8kYWgAu+J1Kpa+0IyT/r7KGe9mz6kHKwV35RHLlyuY4K562UXketrcMmAzGlRVW7UaIK4xgdzKT6e+RIJfKg4+ZqM0FUFwcV0ddD9A7+XgXrUp1r/HTaON80RL/8M9Vwqw8YAQ==",
+          "thinking": "Since Q2 ended three months before the extract, late reporting should be mostly complete by now, with bodily injury claims possibly trailing slightly. That's fine for this analysis, so I'll proceed with the SQL query.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01SzkofnQFwiRdqyBh4Y1Tei",
+          "input": {
+            "sql": "SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01SzkofnQFwiRdqyBh4Y1Tei",
+          "content": "{\"columns\": [\"state\", \"frequency_per_1000_per_month\"], \"rows\": [[\"CA\", 7.24], [\"FL\", 6.95], [\"GA\", 8.07], [\"IL\", 6.89], [\"NC\", 5.92], [\"NY\", 8.24], [\"OH\", 5.34], [\"TX\", 7.52]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Auto claim frequency is claims per 1,000 policies in force per month. It is the company metric: 1000 \u00d7 claims by loss date \u00f7 policy-months. The period is Q2 2026 (2026-04-01 to 2026-06-30), by policy state. Q2 ended three months before the extract date, so late reporting has little effect. Bodily injury claims report latest, so a few may still be missing.\",\"answer\":\"Auto claim frequency in Q2 2026, in claims per 1,000 policies per month, was highest in NY (8.24) and GA (8.07). Next were TX (7.52), CA (7.24), FL (6.95) and IL (6.89). The lowest were NC (5.92) and OH (5.34).\",\"answer_sql\":\"SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state\",\"findings\":[{\"claim\":\"Auto claim frequency by state, Q2 2026, ranges from 5.34 (OH) to 8.24 (NY) claims per 1,000 policies per month.\",\"evidence_sql\":\"SELECT n.state, round(1000*n.c/d.pm,2) AS frequency_per_1000_per_month FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state\",\"key_numbers\":[{\"label\":\"NY\",\"value\":8.24,\"unit\":\"per 1,000/month\"},{\"label\":\"GA\",\"value\":8.07,\"unit\":\"per 1,000/month\"},{\"label\":\"TX\",\"value\":7.52,\"unit\":\"per 1,000/month\"},{\"label\":\"CA\",\"value\":7.24,\"unit\":\"per 1,000/month\"},{\"label\":\"FL\",\"value\":6.95,\"unit\":\"per 1,000/month\"},{\"label\":\"IL\",\"value\":6.89,\"unit\":\"per 1,000/month\"},{\"label\":\"NC\",\"value\":5.92,\"unit\":\"per 1,000/month\"},{\"label\":\"OH\",\"value\":5.34,\"unit\":\"per 1,000/month\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[],\"charts\":[{\"title\":\"Auto claim frequency by state, Q2 2026\",\"sql\":\"SELECT n.state, round(1000*n.c/d.pm,2) AS frequency FROM (SELECT state, count(*) c FROM claims WHERE product='auto' AND loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) n JOIN (SELECT state, sum(policies_in_force) pm FROM exposure_monthly WHERE product='auto' AND month BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY state) d USING (state) ORDER BY state\",\"type\":\"bar\",\"x\":\"state\",\"y\":\"frequency\"}],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

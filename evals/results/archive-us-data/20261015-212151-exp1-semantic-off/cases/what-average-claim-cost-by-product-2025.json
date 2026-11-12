@@ -1,0 +1,348 @@
+{
+  "case_id": "what-average-claim-cost-by-product-2025",
+  "repeat": 1,
+  "question": "What was the average claim cost by product in 2025?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost (severity) = incurred (paid + reserve) divided by number of claims, by product. It covers claims with a 2025 loss date (2025-01-01 to 2025-12-31). The 159 payment rows from the 'reload-2026-03-14' batch are excluded because they exactly duplicate payments already loaded in the nightly batches. Claims with no payments count as zero paid.",
+    "answer": "For 2025 losses, home claims averaged about $13,926 each (935 claims, $13.02M incurred). Auto claims averaged about $5,868 each (2,720 claims, $15.96M incurred). Home claims cost roughly 2.4 times as much as auto claims. Auto has about three times as many claims.",
+    "answer_sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) AS claims, round(sum(coalesce(p.paid,0)+c.reserve_amount),2) AS incurred, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) AS avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "Average incurred cost per claim for 2025 losses is $5,867.66 for auto and $13,925.93 for home.",
+        "evidence_sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) AS claims, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) AS avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1",
+        "key_numbers": [
+          {
+            "label": "auto avg claim cost",
+            "value": 5867.66,
+            "unit": "USD"
+          },
+          {
+            "label": "home avg claim cost",
+            "value": 13925.93,
+            "unit": "USD"
+          },
+          {
+            "label": "auto claims",
+            "value": 2720,
+            "unit": "claims"
+          },
+          {
+            "label": "home claims",
+            "value": 935,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows were loaded twice in the out-of-schedule batch reload-2026-03-14. All 159 match existing nightly rows exactly.",
+        "impact": "I excluded them. Including them would overstate paid amounts and average cost."
+      },
+      {
+        "issue": "Reserves on open claims are estimates and can change. Bodily injury and liability claims are reported late and settle slowly, so 2025 incurred may still develop.",
+        "impact": "These averages could move as claims develop. A few very large payments and reserves (outliers) are included."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate reload-2026-03-14 payment rows",
+        "reason": "159 rows in claim_payments duplicate nightly-loaded payments and inflate paid amounts for anyone not filtering them."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.035134,
+  "seconds": 19.18,
+  "tool_calls": [
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) claims, round(sum(coalesce(p.paid,0)+c.reserve_amount),2) incurred, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) claims, round(sum(coalesce(p.paid,0)+c.reserve_amount),2) incurred, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1 ORDER BY 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) n, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch NOT LIKE 'reload%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE load_batch LIKE 'reload%'"
+      },
+      "source": "custom_query",
+      "error": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"matched\"\n\nLINE 1: ...=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE load_batch LIKE 'reload...\n                                                                       ^"
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT count(*) n, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch NOT LIKE 'reload%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) AS matched_rows FROM claim_payments r WHERE load_batch LIKE 'reload%'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT count(*) n, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch NOT LIKE 'reload%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) AS matched_rows FROM claim_payments r WHERE load_batch LIKE 'reload%'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-ac0d6761d6ee",
+      "run_id": "r-1cfb9f6abcc4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 194,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 165,
+      "cost_usd": 0.003747,
+      "seconds": 3.94,
+      "request_id": "req_011Cg3s3Z9m1A78mqe1jzghe"
+    },
+    {
+      "session_id": "s-ac0d6761d6ee",
+      "run_id": "r-1cfb9f6abcc4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 609,
+      "cache_read_input_tokens": 7097,
+      "cache_creation_input_tokens": 1410,
+      "cost_usd": 0.011038,
+      "seconds": 4.22,
+      "request_id": "req_011Cg3s3rGdv3VFhymJTPH3Y"
+    },
+    {
+      "session_id": "s-ac0d6761d6ee",
+      "run_id": "r-1cfb9f6abcc4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 219,
+      "cache_read_input_tokens": 8507,
+      "cache_creation_input_tokens": 877,
+      "cost_usd": 0.006088,
+      "seconds": 2.39,
+      "request_id": "req_011Cg3s4ARnpEsW7nkHQTeYf"
+    },
+    {
+      "session_id": "s-ac0d6761d6ee",
+      "run_id": "r-1cfb9f6abcc4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1173,
+      "cache_read_input_tokens": 9384,
+      "cache_creation_input_tokens": 260,
+      "cost_usd": 0.014261,
+      "seconds": 8.2,
+      "request_id": "req_011Cg3s4Lq7isM8vkdm6pe8n"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate reload-2026-03-14 payment rows",
+      "reason": "159 rows in claim_payments duplicate nightly-loaded payments and inflate paid amounts for anyone not filtering them."
+    }
+  ],
+  "session_id": "s-ac0d6761d6ee",
+  "run_id": "r-1cfb9f6abcc4",
+  "numbers": {
+    "checked": 4,
+    "confirmed": 4,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost by product in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS1AYKEAgSGAI4AUIIdGhpbmtpbmcSDJ/WJDzXbx0zQKI/zhoMHnbi8KnCyRA4f/UUIjBifgAsq0AkUem1OGfuXlH5eS2JrrIclbupyknPBjICcunRwI/nVNikEpj7EOMbFh8q8QVuJyVOq2xAMlkyo2eAV4qVVahnMl9THKEVktOpS+Mer1CjRqXa2DKCDgbgaXm5zapctEGsxOfXnbFoBcgsFlgsBaTqRzcT2LG6fJ1UkgkX5WVPORrmNgF6gahCIrkenWZYtQeBnlxVFcHSA34VQTJRacisAKTQMHKtJkTJ40b33AnTG1FApJkglykQU5Ud9eklkkwyyg6K6BQ5FUVk5HE/9fBNZ72BPFoqJMFceR4QXLnhyPCiocNWb2sdpmRRKb2NJcXnhsfMeGKQZ8js1avjHluGszk6aY3OK2C46oCPjE9o4P/DmWjjzAdhZuyAdPVxo+3TQrtriMSH4mC3tG/DbeK64uONtrYjQkH1Vnkwhmslg0Pdg5a4rvfm+bSl0NGmVIAzp7PqCSUnex2Zr7xqO0oaTmsT9crfGYBBME0VD4oIVkYrE5nRWfvoL6yw4U9FPOVKVD/zSQCSo+9QxeNU5xdnpWX1zn9WBXyJbJgm3S2gTfKa30Hl3p7ZkSIjO+FBjJZk4xNgTaoN9nCrVgjrgqMHsMDJcnuOu+eQp0RzhC1eK997EYBXxK4xkXMYuzfLCEOeOQ8NU6yLQcZb5koeB5NjW0iuQWkyRopUIUYc70S9ARi4jYw3Rpt9pKXLQi9UvYlSh1yQJ8fZAEXPAViiakPnE8ITIHZz+xp/wZTCQ0WvZzY7ObnbtDyTKq5exFamVY2pASkLLZwJwncafOVGw3CrPADNjTRkv45DZXXNsKnSD5FHdgETI7Z1qqYYKIWROxY7tflLqqqLoqrzgM8z1Kx6EDBUDQv/zSMg+OEizx6xxIBGhyoVBSBTcEYqswnUROE5DWyOEHpgNF93t9otUCkQBsyMSEgfedo2n85LiY24RmIyDaAM6pCfFH9MfMZuh4MdlMxiGIEB02cyXU+OS1KyM8oxgKzISE80B16zb4uHjmkvhl8NzY+gWLt42FKIlt/fB1B5LfeBOyi6KnlfSmDCtTfiDp0GQiFsESCYimUYAQ==",
+          "thinking": "I need to calculate incurred amounts (paid plus reserve) per claim by product for 2025, using loss date to define the year, and should also check the payment data for quality issues like duplicates or entries outside normal processing windows before running the numbers.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01UBWbrPrm41Aex71nphQZd7",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01WnMpEGkzhWDkiayvJVdf9h",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01UBWbrPrm41Aex71nphQZd7",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01WnMpEGkzhWDkiayvJVdf9h",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS5wcKEAgSGAI4AUIIdGhpbmtpbmcSDNpHK7mBc8Cp/KCoWBoMJ421VRRG1r1BY88WIjBes/kxikkUlOnx7rMd4YsLgg7ryIdS7shdjHaf2pRmidiCYuHAeaSg++OphG2w4sQqhAclNcQ/TwtoxAQnqsQ2ixIjE0Kx4UAOHDkoYgPQ3ECyqeT9T/2jUZEo+1Y2ZJr0j2x6HkA1d/67WBXa61BbDQ1IatUay2aleoFbt+ndkEUv2g3GF+oJFuS/J0BN+HqzdW5haqSZEk8SGieOtRCXJ/La6NNaysbTT0UHBL9dSTrdSYIFXbevV9rY0twK7jtaND4wjN1DAB2+w22G5xqjGyO3OescaJQipp/qTGrqPwQQFHByb3G6gbn7vCT9O22s8wBsTuvYmeJHr0bcdI18YRm0WfFtBsUUA0x5ii6C7jmdgVTqrhziOC2jiL5SNTCs1yvsRZWsjcjBDcNZoMda+EvFHA7SQYLRCM5AbX0Fn25bsldcqomvEebZB1zFiH1PwZmJFRHvRmwpsuAmIhjdCw5WKBvKw0apCUNDO0hdkb2wC9mPuZLWWuYLLlPPkm8F2i39pDsPJdVPSslQjOUqO+qrzW5QF9dO3C8/+Lm+PHWb9SUU0k/30Zc46t6+VYmPTgye9g36VzVvhNnVpa+LzJ0ajUYRcUd2MND6CoT3mr3zWwp9wPt60XIerE3pWp5vvNSQo+ramH3rrpVWTepX4qmVImaplVhi0kzP+eh1+aZCpZorVtyfvb+JVaRnYTF10qlLIzFf892maDRCteCwa/aHyGsvZSrEf7kTdLqTKYtwIQ8tg4w4dUuTflSDI8GTjevultNXA7l9DYomR0bjPM9FFXRSsEEGRaIOSpqRDqe2eWVyJYWJRnEwAzNy4e3ogfhaRSoYkZXXE1XEXgVKb3tzS2DGaD7WcIUkkwQ/uh6GQgca+gEDcup8Yaa34eAPL90N+8N3p8ET6GqWwZHkpoTosmz+FU329PSL5qCZwoY2vKHFRMPaebQmKnDBUuzrL/eQWgpcuFE0u9mMxcJD+hH3M7loyOlW7t2iSRj/wbQO19Viy0sS7cBSYxdd1pq5orJqnmylkI4pIKE9agLB/bXwZByCrsHNvt3K7xefpSoBxLYcnmRnycu9Vws3x5qHdX0Yl7UPvMWT7OV/Qbk2f1X2vx0HT7BvIT7Urvqo1Sl3YFCk2vWI6scIBhvi3lS9kydBnt99UkT1PVvq9eEg4P1p+wYO4XxtvrkxDvYdNc1YLT6dDSNfCsBAU7lHSt8Stvmg1Yw+HKo5IviinA65gUiHAmv0UXU0ZS8joIyKzRB4QiaJFHgYAQ==",
+          "thinking": "The reload batch is creating 159 duplicate rows, so the safest fix is to exclude that reload batch entirely rather than trying to dedupe by matching fields, since legitimate duplicates could exist. I'll verify this works correctly in the final query.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_019KQvCm76JLyMaFK674Zf2Q",
+          "input": {
+            "sql": "WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) claims, round(sum(coalesce(p.paid,0)+c.reserve_amount),2) incurred, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_014yhrdvMCS1BkVgmpo9W4iv",
+          "input": {
+            "sql": "SELECT count(*) n, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch NOT LIKE 'reload%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE load_batch LIKE 'reload%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_019KQvCm76JLyMaFK674Zf2Q",
+          "content": "{\"columns\": [\"product\", \"claims\", \"incurred\", \"avg_claim_cost\"], \"rows\": [[\"auto\", 2720, 15960031.87, 5867.66], [\"home\", 935, 13020747.97, 13925.93]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_014yhrdvMCS1BkVgmpo9W4iv",
+          "content": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"matched\"\n\nLINE 1: ...=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) matched FROM claim_payments r WHERE load_batch LIKE 'reload...\n                                                                       ^",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_017qQnmdU26bELzVq69xZA4n",
+          "input": {
+            "sql": "SELECT count(*) n, sum(CASE WHEN EXISTS (SELECT 1 FROM claim_payments o WHERE o.load_batch NOT LIKE 'reload%' AND o.claim_id=r.claim_id AND o.payment_date=r.payment_date AND o.amount=r.amount AND o.payee_type=r.payee_type) THEN 1 ELSE 0 END) AS matched_rows FROM claim_payments r WHERE load_batch LIKE 'reload%'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017qQnmdU26bELzVq69xZA4n",
+          "content": "{\"columns\": [\"n\", \"matched_rows\"], \"rows\": [[159, 159]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost (severity) = incurred (paid + reserve) divided by number of claims, by product. It covers claims with a 2025 loss date (2025-01-01 to 2025-12-31). The 159 payment rows from the 'reload-2026-03-14' batch are excluded because they exactly duplicate payments already loaded in the nightly batches. Claims with no payments count as zero paid.\",\"answer\":\"For 2025 losses, home claims averaged about $13,926 each (935 claims, $13.02M incurred). Auto claims averaged about $5,868 each (2,720 claims, $15.96M incurred). Home claims cost roughly 2.4 times as much as auto claims. Auto has about three times as many claims.\",\"answer_sql\":\"WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) AS claims, round(sum(coalesce(p.paid,0)+c.reserve_amount),2) AS incurred, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) AS avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"Average incurred cost per claim for 2025 losses is $5,867.66 for auto and $13,925.93 for home.\",\"evidence_sql\":\"WITH p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT c.product, count(*) AS claims, round(sum(coalesce(p.paid,0)+c.reserve_amount)/count(*),2) AS avg_claim_cost FROM claims c LEFT JOIN p USING(claim_id) WHERE c.loss_date BETWEEN '2025-01-01' AND '2025-12-31' GROUP BY 1\",\"key_numbers\":[{\"label\":\"auto avg claim cost\",\"value\":5867.66,\"unit\":\"USD\"},{\"label\":\"home avg claim cost\",\"value\":13925.93,\"unit\":\"USD\"},{\"label\":\"auto claims\",\"value\":2720,\"unit\":\"claims\"},{\"label\":\"home claims\",\"value\":935,\"unit\":\"claims\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows were loaded twice in the out-of-schedule batch reload-2026-03-14. All 159 match existing nightly rows exactly.\",\"impact\":\"I excluded them. Including them would overstate paid amounts and average cost.\"},{\"issue\":\"Reserves on open claims are estimates and can change. Bodily injury and liability claims are reported late and settle slowly, so 2025 incurred may still develop.\",\"impact\":\"These averages could move as claims develop. A few very large payments and reserves (outliers) are included.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate reload-2026-03-14 payment rows\",\"reason\":\"159 rows in claim_payments duplicate nightly-loaded payments and inflate paid amounts for anyone not filtering them.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,359 @@
+{
+  "case_id": "what-average-claim-cost-by-product-2026-q2",
+  "repeat": 1,
+  "question": "What was the average claim cost by product in Q2 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost is incurred (paid plus open reserve) divided by claim count, using the agreed metric. Claims are counted by loss date for Q2 2026 (2026-04-01 to 2026-06-30), split by product.",
+    "answer": "For Q2 2026, auto claims averaged about $6,269 each (643 claims). Home claims averaged about $14,152 each (461 claims). A home claim therefore costs about 2.3 times an auto claim. Q2 is more than 3 months before the extract date, so late reporting should have little effect. Some Q2 claims are still open, and their reserves are estimates that can change.",
+    "answer_sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product",
+    "findings": [
+      {
+        "claim": "Q2 2026 average claim cost: auto about $6,269 and home about $14,152, by loss date.",
+        "evidence_sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product",
+        "key_numbers": [
+          {
+            "label": "Auto average claim cost",
+            "value": 6268.63,
+            "unit": "USD"
+          },
+          {
+            "label": "Home average claim cost",
+            "value": 14151.96,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "The claims table has 15 very large reserve outliers (the largest is $178,549). Open-claim reserves are estimates.",
+        "impact": "A few large reserves could raise the averages somewhat. I did not check whether any of them fall in Q2 2026."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.031871,
+  "seconds": 15.7,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [
+          "product"
+        ],
+        "filters": [],
+        "grain": null,
+        "start": "2026-04-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT product, sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2026-04-01'\n  AND loss_date <= DATE '2026-06-30'\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost, count(*) AS claims FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product"
+      },
+      "source": "custom_query",
+      "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost, count(*) AS claims FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product"
+      },
+      "source": "custom_query",
+      "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product",
+      "rows": 2,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-725b8b215d17",
+      "run_id": "r-95fa20ac1675",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 54,
+      "cache_read_input_tokens": 8085,
+      "cache_creation_input_tokens": 168,
+      "cost_usd": 0.002585,
+      "seconds": 1.44,
+      "request_id": "req_011Cg3uJFhvKyehwAPBSv1Hi"
+    },
+    {
+      "session_id": "s-725b8b215d17",
+      "run_id": "r-95fa20ac1675",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 227,
+      "cache_read_input_tokens": 8253,
+      "cache_creation_input_tokens": 211,
+      "cost_usd": 0.004452,
+      "seconds": 1.89,
+      "request_id": "req_011Cg3uJMjKEPdTE4txNG4XZ"
+    },
+    {
+      "session_id": "s-725b8b215d17",
+      "run_id": "r-95fa20ac1675",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 292,
+      "cache_read_input_tokens": 8464,
+      "cache_creation_input_tokens": 1277,
+      "cost_usd": 0.007809,
+      "seconds": 3.94,
+      "request_id": "req_011Cg3uJWA4ohVYyFUA93JED"
+    },
+    {
+      "session_id": "s-725b8b215d17",
+      "run_id": "r-95fa20ac1675",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 245,
+      "cache_read_input_tokens": 9741,
+      "cache_creation_input_tokens": 366,
+      "cost_usd": 0.005317,
+      "seconds": 2.08,
+      "request_id": "req_011Cg3uJo7YG4DbKjgpXGKqP"
+    },
+    {
+      "session_id": "s-725b8b215d17",
+      "run_id": "r-95fa20ac1675",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 891,
+      "cache_read_input_tokens": 10107,
+      "cache_creation_input_tokens": 309,
+      "cost_usd": 0.011708,
+      "seconds": 5.98,
+      "request_id": "req_011Cg3uJx7GpcjPVud2aeuZJ"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-725b8b215d17",
+  "run_id": "r-95fa20ac1675",
+  "numbers": {
+    "checked": 2,
+    "confirmed": 2,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost by product in Q2 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_017MAsmJneZWC4pFX29quDwU",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017MAsmJneZWC4pFX29quDwU",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01UbthYDPcy2QRdPDt68fow4",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [
+              "product"
+            ],
+            "filters": [],
+            "grain": null,
+            "start": "2026-04-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01JpqYRBBCavK5W6DZJnseMq",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01UbthYDPcy2QRdPDt68fow4",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"USD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT product, sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2026-04-01'\\n  AND loss_date <= DATE '2026-06-30'\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"product\", \"value\"], \"rows\": [[\"auto\", 6268.625147744946], [\"home\", 14151.956160520607]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JpqYRBBCavK5W6DZJnseMq",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSxgUKEAgSGAI4AUIIdGhpbmtpbmcSDAvxVmYDQbsphU8BmRoMVhdGW01F85wG7MI5IjDeuViUrXuxxyY/7oJeHeIsZrGMmk1TavCi0PgzEdTT2S+3ZmJyKGSr24DZAp4Lbigq4wQMaQJ6CZxUlUTyruCqkP9euS+br0cnYUK16+hvqWbT2GBpPO2CLTaJ48F4NII5aw8t+pbnYtnjxUx9IFryTcomQwalUIYm0wj06SXH69ygGjm5uekU/ItmA33jG1Kts6sOjXz/b4XtnfAR5sAXe8Q5OxvINy+Hx8/scfrcaKPzWhyQg4yz5u9Z+Y1fUF9ajx6eyBXDvci6gkiHVkJXYvSbgNK+qEUEk0GFtfhOqq7Q8qPdlKg646MPo36YHeUbV/MtXc+ppTpkWcQdp4mXT+SbN3QUMbalT4fhMS7MRhgcLwYRx0Yic/UGGEOxQceA9vrQXsvGkVZ8XCA3sLVvml4kU7FX8+JjQsPgLIB7gJ7pTl4Ja8FYLfUhDyantf2pZPtUrEnILi3qu9Y4lUC+9pCd2Xp6a2KuFnjT6mO4ipYO0mffADY1QOj6izOVAOSyuhW/LSfDLHWym1yI3bvhwlUpIU517f3zUFzWifofgHe9L+lMx6oeQeBN7uKnAkmbdqfLkjRisyR4Wl6xEKTstLGHEACvMoK0J+5YYlPfYpk9UXb2voKfz0EmtCapeaxFfClqZFfeQCDb8e90oRfUbgNFR9sYazRWpiieCkYCO52Uf5acnNsegwPAovJHr+eNVsuuIGrHdS+YYFPqZHkIm0RWRpFhEudEBZontaXhYT1ksFsOxQfi8plIXApTehmugCnROiXN7H8iixfJqNzxopM3Uhlg8AJtHwuXBeKl2mXDe9hqWPFxT7OXRQss5ejQE66zPTwkbiBxO0XINmH+JDj+dAtpu9FyPu6oyFIkkEJjjxOFqxgB",
+          "thinking": "I think Q2 is sufficiently covered now\u2014payments loaded outside the nightly batches could be a minor factor, but it shouldn't change the overall answer. I'm ready to move forward.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01CSr1AH8hfiRkKPKhiinvRU",
+          "input": {
+            "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost, count(*) AS claims FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01CSr1AH8hfiRkKPKhiinvRU",
+          "content": "{\"columns\": [\"product\", \"avg_claim_cost\", \"claims\"], \"rows\": [[\"auto\", 6268.625147744946, 643], [\"home\", 14151.956160520607, 461]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01E3P67LuuYTzknVtkG6iDAf",
+          "input": {
+            "sql": "WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01E3P67LuuYTzknVtkG6iDAf",
+          "content": "{\"columns\": [\"product\", \"avg_claim_cost\"], \"rows\": [[\"auto\", 6268.625147744946], [\"home\", 14151.956160520607]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost is incurred (paid plus open reserve) divided by claim count, using the agreed metric. Claims are counted by loss date for Q2 2026 (2026-04-01 to 2026-06-30), split by product.\",\"answer\":\"For Q2 2026, auto claims averaged about $6,269 each (643 claims). Home claims averaged about $14,152 each (461 claims). A home claim therefore costs about 2.3 times an auto claim. Q2 is more than 3 months before the extract date, so late reporting should have little effect. Some Q2 claims are still open, and their reserves are estimates that can change.\",\"answer_sql\":\"WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product\",\"findings\":[{\"claim\":\"Q2 2026 average claim cost: auto about $6,269 and home about $14,152, by loss date.\",\"evidence_sql\":\"WITH source AS (SELECT c.product, c.loss_date, coalesce(pay.paid,0)+c.reserve_amount AS incurred FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id)) SELECT product, sum(incurred)/count(*) AS avg_claim_cost FROM source WHERE loss_date BETWEEN DATE '2026-04-01' AND DATE '2026-06-30' GROUP BY product ORDER BY product\",\"key_numbers\":[{\"label\":\"Auto average claim cost\",\"value\":6268.63,\"unit\":\"USD\"},{\"label\":\"Home average claim cost\",\"value\":14151.96,\"unit\":\"USD\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"The claims table has 15 very large reserve outliers (the largest is $178,549). Open-claim reserves are estimates.\",\"impact\":\"A few large reserves could raise the averages somewhat. I did not check whether any of them fall in Q2 2026.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

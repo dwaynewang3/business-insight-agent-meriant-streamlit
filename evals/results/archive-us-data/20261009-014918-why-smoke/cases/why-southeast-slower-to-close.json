@@ -1,0 +1,660 @@
+{
+  "case_id": "why-southeast-slower-to-close",
+  "question": "Why are Southeast claims taking longer to close since May 2026?",
+  "role": "claims_ops_manager",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Cycle time is the agreed metric: the median days from report date to close date for closed claims, grouped by report month. I looked at Southeast (FL, GA, NC) claims reported from May 2026 and compared them with January\u2013April 2026. I left out August and September 2026 from the comparison because those months are still incomplete.",
+    "answer": "The slowdown is real, and it lines up with two Southeast adjusters leaving. The median cycle time for Southeast claims rose from about 28 days (Jan\u2013Apr reports) to about 38 days (May\u2013Jul reports). It peaked at 40 days for July reports. ADJ-016 left on 2026-05-01 and ADJ-017 left on 2026-05-15, and no one replaced them in the data. The region went from 6 adjusters to 4, so each handles about 25\u201327 new claims a month instead of about 16. Cycle time rose across nearly every cause of loss, which fits a capacity problem. Texas, California and North did not show a comparable rise. The apparent improvement for Aug\u2013Sep reports isn't real. Those claims are mostly still open, so only the quick ones count as closed.",
+    "answer_sql": "SELECT strftime(report_date,'%Y-%m') AS report_month, count(*) AS claims, count(distinct adjuster_id) AS adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) AS claims_per_adjuster, median(close_date-report_date) FILTER (WHERE status='closed') AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "Southeast median cycle time rose from the Jan\u2013Apr level to May\u2013Jul, while other regions stayed roughly flat.",
+        "evidence_sql": "SELECT region, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, median(close_date-report_date) AS med, count(*) AS n FROM claims WHERE report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 1,2",
+        "key_numbers": [
+          {
+            "label": "Southeast median days, Jan\u2013Apr",
+            "value": 28,
+            "unit": "days"
+          },
+          {
+            "label": "Southeast median days, May\u2013Jul",
+            "value": 38,
+            "unit": "days"
+          },
+          {
+            "label": "North median days, Jan\u2013Apr",
+            "value": 27,
+            "unit": "days"
+          },
+          {
+            "label": "North median days, May\u2013Jul",
+            "value": 28,
+            "unit": "days"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Two Southeast adjusters left in May 2026 (ADJ-016 on May 1, ADJ-017 on May 15). The four remaining adjusters (ADJ-018 to ADJ-021) absorbed their claims, so the caseload per adjuster rose by about 60%. Each of the four now takes longer to close claims than before.",
+        "evidence_sql": "SELECT c.adjuster_id, a.leave_date, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, count(*) AS n, median(close_date-report_date) AS med FROM claims c LEFT JOIN adjusters a USING(adjuster_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY per, n DESC",
+        "key_numbers": [
+          {
+            "label": "Claims per adjuster per month, Jan\u2013Apr",
+            "value": 16,
+            "unit": "claims"
+          },
+          {
+            "label": "Claims per adjuster per month, May\u2013Jul",
+            "value": 26.3,
+            "unit": "claims"
+          },
+          {
+            "label": "Adjusters active",
+            "value": 4,
+            "unit": "adjusters"
+          }
+        ],
+        "confidence": "medium"
+      },
+      {
+        "claim": "The slowdown is broad. Collision rose from 23 to 31 days, water damage from 37 to 54, theft from 31 to 43 and glass from 6 to 10.5. Repair shops don't explain it, because both preferred and non-preferred shops slowed (preferred 20 to 27 days, non-preferred 15.5 to 25).",
+        "evidence_sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, cause, count(*) AS n, median(close_date-report_date) AS med FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY cause, per",
+        "key_numbers": [
+          {
+            "label": "Collision median, before",
+            "value": 23,
+            "unit": "days"
+          },
+          {
+            "label": "Collision median, after",
+            "value": 31,
+            "unit": "days"
+          },
+          {
+            "label": "Water damage median, before",
+            "value": 37,
+            "unit": "days"
+          },
+          {
+            "label": "Water damage median, after",
+            "value": 54,
+            "unit": "days"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Adjuster attrition and a higher caseload per adjuster",
+        "verdict": "supported",
+        "evidence": "Two of six Southeast adjusters left in May, and the load per adjuster rose from about 16 to about 26 claims a month. The timing matches the slowdown. This is a correlation: the data can't prove the departures caused it."
+      },
+      {
+        "hypothesis": "A particular repair shop or network status",
+        "verdict": "ruled_out",
+        "evidence": "Preferred and non-preferred shops both slowed by about 7\u201310 days."
+      },
+      {
+        "hypothesis": "A shift in the mix of causes toward slower claim types",
+        "verdict": "ruled_out",
+        "evidence": "Most causes slowed individually. The share of slow bodily injury and liability claims did not rise (30 of 315 claims after, 33 of 379 before)."
+      },
+      {
+        "hypothesis": "Data artifact or incomplete months",
+        "verdict": "inconclusive",
+        "evidence": "The May\u2013Jul figures are mostly complete, with 5\u201320 claims per month still open, so they slightly understate the true slowdown. Aug\u2013Sep figures are distorted because their slowest claims are still open. There were no duplicate rows."
+      },
+      {
+        "hypothesis": "Regional or company-wide slowdown",
+        "verdict": "ruled_out",
+        "evidence": "Median cycle times in the other regions stayed within a few days of their earlier levels."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "Cycle time counts only closed claims, and recent report months have many claims still open (62 open for Aug and 114 for Sep in the Southeast).",
+        "impact": "Aug\u2013Sep cycle times (28 and 9 days) look faster than they will end up. Don't read them as a recovery."
+      },
+      {
+        "issue": "Report volume in the Southeast rose in Aug\u2013Sep (143 and 135 claims, against about 100 a month before).",
+        "impact": "Caseload per adjuster is even higher in those months. I didn't investigate the cause, and it may add to the backlog."
+      }
+    ],
+    "charts": [
+      {
+        "title": "Southeast median days to close by report month, with claims per adjuster",
+        "sql": "SELECT strftime(report_date,'%Y-%m') AS report_month, median(close_date-report_date) AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1",
+        "type": "line",
+        "x": "report_month",
+        "y": "median_days_to_close"
+      }
+    ],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Review Southeast adjuster staffing and rebalance the open caseload",
+        "reason": "Four adjusters are carrying the work of six. Their open backlog is growing (114 September-reported claims still open), and report volume is rising."
+      }
+    ],
+    "open_questions": [
+      "Was a replacement hire planned for the Southeast, and have the departed adjusters' claims been reassigned evenly?",
+      "What is behind the jump in Southeast claim reports in Aug\u2013Sep 2026?"
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.076454,
+  "seconds": 43.86,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "cycle_time_days"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "cycle_time_days",
+        "dimensions": [
+          "region"
+        ],
+        "filters": [],
+        "grain": "month",
+        "start": "2026-01-01",
+        "end": "2026-09-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('month', report_date) AS DATE) AS period, region, median(days_to_close) FILTER (WHERE status = 'closed') AS value\nFROM source\nWHERE report_date >= DATE '2026-01-01'\n  AND report_date <= DATE '2026-09-30'\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 36,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, cause, count(*) n, count(*) filter(where status='closed') closed, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY cause, per"
+      },
+      "source": "custom_query",
+      "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, cause, count(*) n, count(*) filter(where status='closed') closed, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY cause, per",
+      "rows": 18,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT c.adjuster_id, a.leave_date, a.region, a.hire_date, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, count(*) n, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims c LEFT JOIN adjusters a USING(adjuster_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY per, n desc"
+      },
+      "source": "custom_query",
+      "sql": "SELECT c.adjuster_id, a.leave_date, a.region, a.hire_date, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, count(*) n, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims c LEFT JOIN adjusters a USING(adjuster_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY per, n desc",
+      "rows": 10,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT strftime(report_date,'%Y-%m') m, count(*) claims, count(distinct adjuster_id) adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter(where status='open') open_now, median(close_date-report_date) med FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "SELECT strftime(report_date,'%Y-%m') m, count(*) claims, count(distinct adjuster_id) adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter(where status='open') open_now, median(close_date-report_date) med FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' GROUP BY 1 ORDER BY 1",
+      "rows": 9,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, r.network_status, count(*) n, median(close_date-report_date) med FROM claims c JOIN repair_shops r USING(repair_shop_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 2,1"
+      },
+      "source": "custom_query",
+      "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, r.network_status, count(*) n, median(close_date-report_date) med FROM claims c JOIN repair_shops r USING(repair_shop_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 2,1",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT region, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, median(close_date-report_date) med, count(*) n FROM claims WHERE report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 1,2"
+      },
+      "source": "custom_query",
+      "sql": "SELECT region, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, median(close_date-report_date) med, count(*) n FROM claims WHERE report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 1,2",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT strftime(report_date,'%Y-%m') month, count(*) claims, count(distinct adjuster_id) adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) claims_per_adjuster, median(close_date-report_date) median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "error": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"month\"\n\nLINE 1: SELECT strftime(report_date,'%Y-%m') month, count(*) claims, count(distinct adjuster_id) adjusters...\n                                             ^"
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT strftime(report_date,'%Y-%m') AS report_month, count(*) AS claims, count(distinct adjuster_id) AS adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) AS claims_per_adjuster, median(close_date-report_date) AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "SELECT strftime(report_date,'%Y-%m') AS report_month, count(*) AS claims, count(distinct adjuster_id) AS adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) AS claims_per_adjuster, median(close_date-report_date) AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1",
+      "rows": 7,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 102,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 170,
+      "cost_usd": 0.003032,
+      "seconds": 1.88,
+      "request_id": "req_011CfpxTimQ83sKmKpa261ff"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 179,
+      "cache_read_input_tokens": 8065,
+      "cache_creation_input_tokens": 931,
+      "cost_usd": 0.005735,
+      "seconds": 2.2,
+      "request_id": "req_011CfpxTs9B66yqBF7ELY57z"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 501,
+      "cache_read_input_tokens": 8996,
+      "cache_creation_input_tokens": 1276,
+      "cost_usd": 0.010003,
+      "seconds": 4.68,
+      "request_id": "req_011CfpxU2MaLHxAPrZoDT1v1"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 659,
+      "cache_read_input_tokens": 10272,
+      "cache_creation_input_tokens": 1483,
+      "cost_usd": 0.012356,
+      "seconds": 5.89,
+      "request_id": "req_011CfpxUNZzYQEapxWSaSVXt"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 271,
+      "cache_read_input_tokens": 11755,
+      "cache_creation_input_tokens": 1295,
+      "cost_usd": 0.008303,
+      "seconds": 3.21,
+      "request_id": "req_011CfpxUp2vwWbsuGVcdLr6M"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 226,
+      "cache_read_input_tokens": 13050,
+      "cache_creation_input_tokens": 386,
+      "cost_usd": 0.005839,
+      "seconds": 2.54,
+      "request_id": "req_011CfpxV3kggUK8ZMg2Kjfru"
+    },
+    {
+      "session_id": "s-38dadb35dff9",
+      "run_id": "r-8260f63a30a4",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2738,
+      "cache_read_input_tokens": 13436,
+      "cache_creation_input_tokens": 446,
+      "cost_usd": 0.031186,
+      "seconds": 23.25,
+      "request_id": "req_011CfpxVEwPLLNHzKaxj3mTg"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Review Southeast adjuster staffing and rebalance the open caseload",
+      "reason": "Four adjusters are carrying the work of six. Their open backlog is growing (114 September-reported claims still open), and report volume is rising."
+    }
+  ],
+  "session_id": "s-38dadb35dff9",
+  "run_id": "r-8260f63a30a4",
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims operations manager. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why are Southeast claims taking longer to close since May 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01B4fRspjZAFXHdvsMV7NSuu",
+          "input": {
+            "name": "cycle_time_days"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01BAHzrPLcLfD1qYbCePuCv2",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01B4fRspjZAFXHdvsMV7NSuu",
+          "content": "{\"name\": \"cycle_time_days\", \"label\": \"Cycle time\", \"description\": \"Median days from report date to close date, for closed claims, by report date.\", \"unit\": \"days\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"median(days_to_close) FILTER (WHERE status = 'closed') over claim_facts\", \"time_column\": \"report_date\", \"notes\": \"Only closed claims count, so the most recent report months look faster than they will end up: their slowest claims are still open.\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01BAHzrPLcLfD1qYbCePuCv2",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01D9NKDcVaN1HzuvEugTEdHG",
+          "input": {
+            "metric": "cycle_time_days",
+            "dimensions": [
+              "region"
+            ],
+            "filters": [],
+            "grain": "month",
+            "start": "2026-01-01",
+            "end": "2026-09-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01D9NKDcVaN1HzuvEugTEdHG",
+          "content": "{\"metric\": \"cycle_time_days\", \"label\": \"Cycle time\", \"unit\": \"days\", \"definition\": \"median(days_to_close) FILTER (WHERE status = 'closed') over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('month', report_date) AS DATE) AS period, region, median(days_to_close) FILTER (WHERE status = 'closed') AS value\\nFROM source\\nWHERE report_date >= DATE '2026-01-01'\\n  AND report_date <= DATE '2026-09-30'\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"region\", \"value\"], \"rows\": [[\"2026-01-01\", \"California\", 24.5], [\"2026-01-01\", \"North\", 22.0], [\"2026-01-01\", \"Southeast\", 27.0], [\"2026-01-01\", \"Texas\", 28.0], [\"2026-02-01\", \"California\", 25.5], [\"2026-02-01\", \"North\", 29.0], [\"2026-02-01\", \"Southeast\", 25.5], [\"2026-02-01\", \"Texas\", 24.0], [\"2026-03-01\", \"California\", 26.0], [\"2026-03-01\", \"North\", 27.0], [\"2026-03-01\", \"Southeast\", 29.5], [\"2026-03-01\", \"Texas\", 23.0], [\"2026-04-01\", \"California\", 23.0], [\"2026-04-01\", \"North\", 30.0], [\"2026-04-01\", \"Southeast\", 31.0], [\"2026-04-01\", \"Texas\", 29.0], [\"2026-05-01\", \"California\", 34.0], [\"2026-05-01\", \"North\", 29.0], [\"2026-05-01\", \"Southeast\", 34.5], [\"2026-05-01\", \"Texas\", 26.5], [\"2026-06-01\", \"California\", 24.0], [\"2026-06-01\", \"North\", 26.0], [\"2026-06-01\", \"Southeast\", 37.0], [\"2026-06-01\", \"Texas\", 29.0], [\"2026-07-01\", \"California\", 26.5], [\"2026-07-01\", \"North\", 29.0], [\"2026-07-01\", \"Southeast\", 40.0], [\"2026-07-01\", \"Texas\", 23.0], [\"2026-08-01\", \"California\", 22.0], [\"2026-08-01\", \"North\", 25.0], [\"2026-08-01\", \"Southeast\", 28.0], [\"2026-08-01\", \"Texas\", 25.5], [\"2026-09-01\", \"California\", 9.0], [\"2026-09-01\", \"North\", 12.5], [\"2026-09-01\", \"Southeast\", 9.0], [\"2026-09-01\", \"Texas\", 19.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSzAUKEAgSGAI4AUIIdGhpbmtpbmcSDH0I/zB5/D8aFcXvahoMYYPVxXGa/c14WZytIjA1kAiAOphiMudT3tBWPVi5p7F26Z+rpyrfYNkvwdrkE9mwAwoAAyIR2TnB4AdZtiEq6QRqsASRqFtQz2HFLsPkH8bT7w+nE/oonVbkvv3rGo+BhOg80fHS3DYiDeqSE8+Rm5ElXFt/gw11rAqp8ZTAI2uHZmLMlM+6+EoHtz2f9nkx8hK74+HNdrrSx0kpIqlLa9GRDTN56i14+qBFTxruEYmehPEiE7fP+CRO/Jxnuxg89qhK6rVGjv11UDtmLFOfJ3nb5CbZQPgt9ZdZG4dM8U2DzYRROKqVEd9z1nCD1hHZs4ssvDp6GaSKLv5AHesDyqsrC2h508b4zsyGVtPvMNM7u40ZzCJaCyRlfAtkcQV8jY4VU+du1VzCxPVc0oDkS51lsmaKoOQI5yTUlPcjVnL4WEzStvtDutYanpFLi0M2s8v6aRkLNxKIabCb8fKMhCRiJFw0ILZ/6ry6WjPuXDo++ku0v8V6u32smq98icyT3azh52+2hVWaRYgyDPxezlxc2TFZbQm70JdCPhqx6jX6zxBMcKBuJ4LOuDxvnkjGbi3PQzptNPPG7KtufeLqjObYWWILBJ+Pmjtrlw/fukQKq508E/lRNULvpNH98v+CJaZwWhxPAj/XLIHxohcQyn/2coEyPKvzD3MddasT+dPvgRHSfR0QERiHTg08TRFl5JBeNPh93/TGOKzndUH0QS8hdREBDbOlwJiik0EnArn3xrboKAicJUb6sLUbbG8HUDzM7+5u4J3YIl4ke8sC76iPghE9rTXXjWN9O5gmdXsPH2KoqWhzMcaV9eXt+VKFNbqMXjw/njLv/omXVcYjsbzJN6Gxm4DA6ApTwk/RVoQw6lgKXSUEcXGg5I9h2C2A3A3rl0BOkF17CRgB",
+          "thinking": "I'm noting the data looks genuine for May through July in the Southeast, with August being partially censored, and I should break it down further by cause, adjuster, state, and product.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01CZDfjahJPRxVnRQ9tywmqs",
+          "input": {
+            "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, cause, count(*) n, count(*) filter(where status='closed') closed, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY cause, per"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_013YW5Yc7LEvR8hpMibERxPR",
+          "input": {
+            "sql": "SELECT c.adjuster_id, a.leave_date, a.region, a.hire_date, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, count(*) n, median(close_date-report_date) med, count(*) filter(where status='open') open FROM claims c LEFT JOIN adjusters a USING(adjuster_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY per, n desc"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01CZDfjahJPRxVnRQ9tywmqs",
+          "content": "{\"columns\": [\"per\", \"cause\", \"n\", \"closed\", \"med\", \"open\"], \"rows\": [[\"post\", \"bodily_injury\", 20, 8, 80.5, 12], [\"pre\", \"bodily_injury\", 22, 22, 79.0, 0], [\"post\", \"collision\", 113, 113, 31.0, 0], [\"pre\", \"collision\", 138, 138, 23.0, 0], [\"post\", \"fire\", 15, 11, 92.0, 4], [\"pre\", \"fire\", 5, 5, 68.0, 0], [\"post\", \"glass\", 38, 38, 10.5, 0], [\"pre\", \"glass\", 48, 48, 6.0, 0], [\"post\", \"hail\", 14, 14, 26.0, 0], [\"pre\", \"hail\", 15, 15, 16.0, 0], [\"post\", \"liability\", 10, 4, 63.5, 6], [\"pre\", \"liability\", 11, 11, 71.0, 0], [\"post\", \"theft\", 24, 22, 43.0, 2], [\"pre\", \"theft\", 51, 51, 31.0, 0], [\"post\", \"water_damage\", 58, 55, 54.0, 3], [\"pre\", \"water_damage\", 54, 54, 37.0, 0], [\"post\", \"wind_hail\", 23, 20, 48.0, 3], [\"pre\", \"wind_hail\", 35, 35, 41.0, 0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_013YW5Yc7LEvR8hpMibERxPR",
+          "content": "{\"columns\": [\"adjuster_id\", \"leave_date\", \"region\", \"hire_date\", \"per\", \"n\", \"med\", \"open\"], \"rows\": [[\"ADJ-018\", null, \"Southeast\", \"2021-02-23\", \"post\", 87, 37.5, 7], [\"ADJ-021\", null, \"Southeast\", \"2017-03-30\", \"post\", 86, 38.0, 11], [\"ADJ-019\", null, \"Southeast\", \"2018-12-24\", \"post\", 77, 34.5, 9], [\"ADJ-020\", null, \"Southeast\", \"2020-12-20\", \"post\", 65, 39.5, 3], [\"ADJ-021\", null, \"Southeast\", \"2017-03-30\", \"pre\", 78, 28.5, 0], [\"ADJ-018\", null, \"Southeast\", \"2021-02-23\", \"pre\", 70, 29.0, 0], [\"ADJ-020\", null, \"Southeast\", \"2020-12-20\", \"pre\", 70, 32.0, 0], [\"ADJ-019\", null, \"Southeast\", \"2018-12-24\", \"pre\", 69, 29.0, 0], [\"ADJ-016\", \"2026-05-01\", \"Southeast\", \"2016-10-24\", \"pre\", 50, 25.0, 0], [\"ADJ-017\", \"2026-05-15\", \"Southeast\", \"2021-02-04\", \"pre\", 42, 26.0, 0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQShQcKEAgSGAI4AUIIdGhpbmtpbmcSDKTQEs6+sY4XDt1AwBoMWsXhXWeuwGz1WjQZIjCaq62r9M7Vg+3mwSmQSIvEA2bsVmiXXnQPnxc+qqGsXorSAZmmF4vDJwfNGNzlELMqogZUPsFK2jFK8KJCh1oLWiopP1en9aJf1pP5BXc84rQKI2sbh22FN5flAq6mGF+Z++jtjZzBshF6ddBQ+q5u7wLhu6Y9A1TKGymCuF20pUmouOt6mHnIczyfdb+f55A7pOi7q1Hv6Vq4TZY1HxTcwiYHz6tMTshzLybfW9FF4eYJMl9hAuDKVWXtKv8/C9WNoynJYYTgd77Db4D4u3D8XL2nmvijyYk6ye3wJFQ7gubou70s51jx9UCrqFEjZLrz0LPTB5yV751P96gV4qdkP/6vGykCq2J/XAMhP72RUMbOiYOvJv30HVslcpA7oukDPn+nejHRjjbDzkUnxrDML4uOTEuaqBwPHsA5PgdxN4GVFs+X9IrAPuDwKeXI7C09EztnF/S8LedZF0PXo0dFGF5J9YCEZhFFqdDpU2c7Qo8wcunvJ9Z7XbA7VUP6geSRN7nVxGn5TXG0UdopirSbNPQWzY15FCAt3q2LAhtvxdlQPcXdkiFULjUfvsHMTEYHL5iIn9mYNFJHf9Md6Cz921q3a2seAi41gphNQejHuc4tfh8OxDJLpaM6Erq2UPqp8q+q2H9PzVHvo9c60JuHB5PiK82sXdKtVy5GikfXkdgIp6hybDYnl6NuIbTVS1BsnVuOy1e5gOTi++UbS6GSId9x2+OG6NIt+dZjURWx0fJIsXhssuDGhHs/PPQypLZhjKLB+LENJwzcneBaLhCV84n7gJu90n6QlxJ6QI+10eR4m3ahxljSUrAz2FuGzayhCdE1IfnjN3AzONlH8oZYpzpQmdOtc0QOud1DG52xJqontWzxy1/GF3zjQThmSv+QWsk8YoSEwdAw/L8IrDx3n+c0bq8Br7OTgEOdia64rLoXBtgqRP8AfoKgiD08ngi4RXBFBq9mtu7U+EQ3H80ESSZkjpASQYN/zzeMuCcXgInMgSR8viRr3RuPTVyMdquCNVijwtmOn7kGKlwJ44Z03YINNV+uToKk+nsV3+65cwXuRUONZxzp17dRYzXaDvPBrewcBtHXeZUEnpS9yXgyAxny1/JckyUof/M2nqkWP33iMCWzGAE=",
+          "thinking": "With two adjusters gone since May 2026, the remaining four are absorbing the full caseload, so I should check claim volume per adjuster by month and also look at how collision shops' slower pace factors into the shop network data.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01WFZ5rgLFrTQTB6gSRsaTB9",
+          "input": {
+            "sql": "SELECT strftime(report_date,'%Y-%m') m, count(*) claims, count(distinct adjuster_id) adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter(where status='open') open_now, median(close_date-report_date) med FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01WFPm1hUAtFN7Lci7REdjGb",
+          "input": {
+            "sql": "SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, r.network_status, count(*) n, median(close_date-report_date) med FROM claims c JOIN repair_shops r USING(repair_shop_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 2,1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_0195m5xNVaNshAhxRiMEMG9Y",
+          "input": {
+            "sql": "SELECT region, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END per, median(close_date-report_date) med, count(*) n FROM claims WHERE report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01WFZ5rgLFrTQTB6gSRsaTB9",
+          "content": "{\"columns\": [\"m\", \"claims\", \"adjusters\", \"per_adj\", \"open_now\", \"med\"], \"rows\": [[\"2026-01\", 91, 6, 15.2, 0, 27.0], [\"2026-02\", 96, 6, 16.0, 0, 25.5], [\"2026-03\", 92, 6, 15.3, 0, 29.5], [\"2026-04\", 100, 6, 16.7, 0, 31.0], [\"2026-05\", 101, 4, 25.3, 5, 34.5], [\"2026-06\", 106, 4, 26.5, 5, 37.0], [\"2026-07\", 108, 4, 27.0, 20, 40.0], [\"2026-08\", 143, 4, 35.8, 62, 28.0], [\"2026-09\", 135, 4, 33.8, 114, 9.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01WFPm1hUAtFN7Lci7REdjGb",
+          "content": "{\"columns\": [\"per\", \"network_status\", \"n\", \"med\"], \"rows\": [[\"post\", \"non-preferred\", 61, 25.0], [\"pre\", \"non-preferred\", 72, 15.5], [\"post\", \"preferred\", 104, 27.0], [\"pre\", \"preferred\", 129, 20.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0195m5xNVaNshAhxRiMEMG9Y",
+          "content": "{\"columns\": [\"region\", \"per\", \"med\", \"n\"], \"rows\": [[\"California\", \"post\", 28.0, 222], [\"California\", \"pre\", 25.5, 194], [\"North\", \"post\", 28.0, 332], [\"North\", \"pre\", 27.0, 480], [\"Southeast\", \"post\", 38.0, 315], [\"Southeast\", \"pre\", 28.0, 379], [\"Texas\", \"post\", 24.0, 454], [\"Texas\", \"pre\", 27.0, 258]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS1gYKEAgSGAI4AUIIdGhpbmtpbmcSDG3PSdt6QUZlURXLMhoMu8PCaEWg2+TkRQmnIjDeHdwCkZDDnyTPj/cgqtPGQt7fash+g8zilwGPUYVn0eoWZJyM/dhlWRaOMAVt8v4q8wVwIloVao8QU0kyPoFpNJ5qI3EnpqGQmdxTVjKdXKzZjpTH3fUuvJABDP5huvQZI+pcriKSnlc4ey7B0IEKlhIsDwv/wYGsCXBfS2U6BfLJLotY1tzN+ufGZlNhcc+1joaVAzXS8Asieso59AZQLFILETWoxCnuwYD71xZCFr4a/ngtnoPs/2VCUOMPXe972hnioSBiTFDeGmgBok1HsVvbS5u2RlR0xXs6yXjCpxR+zE3Op0wlKZkbnCGjk0nSSJbkiZELTzTvykPIXhXvhFmEsLEmeXC/d3V25Ro8OBRBWuYglzkwvFXAFwsGVfQJ9VV5cPwt01pc6WlqenIaXzN+M9LbulBFtSBqotYdSPCMQn8MS5B4Oe5lWS+cIqCgGKHglUurjNc/MbkvDF0gpUHcvwMFb0xJucvZYn+Ligf2Dh4h9GfJSfJtRhpEGhrZNHBLZ51vqFozJzU/8YaemC8vUTFr66CrEKnS6m36CRIQo+BWF6rwFhybJPMYOUafytkMWZDZR2YVstSk1Fgzqhq7nR9NTBzgatAvHri/Xqmy1MKVjmHvuiplDNJ2q7UxxLO9/kQM0fD7hBqADJvjXNgsUbkj7OFw43+bKEzfpln3cORKfA5z5DCC/eqfnn7YSLAmlnFfUF8Ud93qjn/BFofBrsiZKk8q4khF5H8MK+wdVptJGwzQ6V0GlawrV9KW+7g5iqzoAdGSrGLKXofojkMu+3RfdjktH7XAlLRM8T1KFgEfMmrYHIsZlX8yeaZimk+AyBtBT9P1oYztk4YA2Vzr6+AGnMNUczkSf/X39Oc5FSBEFkpyG3umFP36B3stVC1dF64DkQ5Q4NOqh6XQ2aOlJmr1V3qvtMWCoYRHXbCW8Wvqh88vGGlv9QXkBm3OIYHbJJKm4dIuafsL9Zuoi+WQvX19Rh1WSqHVrz+d8uaZkKvkDjMTxz7+K5y2fI2LAA5UptjAri5x2uSESAAbmVPFHJQata46cW0AT4p7rnlGA742ZRgB",
+          "thinking": "I'm also noting the claims volume looks higher in August and September, possibly hurricane-related, so I'll mention that briefly before wrapping up the answer.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01LiBHEjXEUZkqdpf4SKhUKx",
+          "input": {
+            "sql": "SELECT strftime(report_date,'%Y-%m') month, count(*) claims, count(distinct adjuster_id) adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) claims_per_adjuster, median(close_date-report_date) median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01LiBHEjXEUZkqdpf4SKhUKx",
+          "content": "Error executing tool run_sql: QueryFailed: The query couldn't be parsed. Parser Error: syntax error at or near \"month\"\n\nLINE 1: SELECT strftime(report_date,'%Y-%m') month, count(*) claims, count(distinct adjuster_id) adjusters...\n                                             ^",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_017WmEpgc4xomw9nGaAoxK1K",
+          "input": {
+            "sql": "SELECT strftime(report_date,'%Y-%m') AS report_month, count(*) AS claims, count(distinct adjuster_id) AS adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) AS claims_per_adjuster, median(close_date-report_date) AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017WmEpgc4xomw9nGaAoxK1K",
+          "content": "{\"columns\": [\"report_month\", \"claims\", \"adjusters\", \"claims_per_adjuster\", \"median_days_to_close\"], \"rows\": [[\"2026-01\", 91, 6, 15.2, 27.0], [\"2026-02\", 96, 6, 16.0, 25.5], [\"2026-03\", 92, 6, 15.3, 29.5], [\"2026-04\", 100, 6, 16.7, 31.0], [\"2026-05\", 101, 4, 25.3, 34.5], [\"2026-06\", 106, 4, 26.5, 37.0], [\"2026-07\", 108, 4, 27.0, 40.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Cycle time is the agreed metric: the median days from report date to close date for closed claims, grouped by report month. I looked at Southeast (FL, GA, NC) claims reported from May 2026 and compared them with January\u2013April 2026. I left out August and September 2026 from the comparison because those months are still incomplete.\",\"answer\":\"The slowdown is real, and it lines up with two Southeast adjusters leaving. The median cycle time for Southeast claims rose from about 28 days (Jan\u2013Apr reports) to about 38 days (May\u2013Jul reports). It peaked at 40 days for July reports. ADJ-016 left on 2026-05-01 and ADJ-017 left on 2026-05-15, and no one replaced them in the data. The region went from 6 adjusters to 4, so each handles about 25\u201327 new claims a month instead of about 16. Cycle time rose across nearly every cause of loss, which fits a capacity problem. Texas, California and North did not show a comparable rise. The apparent improvement for Aug\u2013Sep reports isn't real. Those claims are mostly still open, so only the quick ones count as closed.\",\"answer_sql\":\"SELECT strftime(report_date,'%Y-%m') AS report_month, count(*) AS claims, count(distinct adjuster_id) AS adjusters, round(count(*)*1.0/count(distinct adjuster_id),1) AS claims_per_adjuster, median(close_date-report_date) FILTER (WHERE status='closed') AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"Southeast median cycle time rose from the Jan\u2013Apr level to May\u2013Jul, while other regions stayed roughly flat.\",\"evidence_sql\":\"SELECT region, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, median(close_date-report_date) AS med, count(*) AS n FROM claims WHERE report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY 1,2\",\"key_numbers\":[{\"label\":\"Southeast median days, Jan\u2013Apr\",\"value\":28,\"unit\":\"days\"},{\"label\":\"Southeast median days, May\u2013Jul\",\"value\":38,\"unit\":\"days\"},{\"label\":\"North median days, Jan\u2013Apr\",\"value\":27,\"unit\":\"days\"},{\"label\":\"North median days, May\u2013Jul\",\"value\":28,\"unit\":\"days\"}],\"confidence\":\"high\"},{\"claim\":\"Two Southeast adjusters left in May 2026 (ADJ-016 on May 1, ADJ-017 on May 15). The four remaining adjusters (ADJ-018 to ADJ-021) absorbed their claims, so the caseload per adjuster rose by about 60%. Each of the four now takes longer to close claims than before.\",\"evidence_sql\":\"SELECT c.adjuster_id, a.leave_date, CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, count(*) AS n, median(close_date-report_date) AS med FROM claims c LEFT JOIN adjusters a USING(adjuster_id) WHERE c.region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY per, n DESC\",\"key_numbers\":[{\"label\":\"Claims per adjuster per month, Jan\u2013Apr\",\"value\":16,\"unit\":\"claims\"},{\"label\":\"Claims per adjuster per month, May\u2013Jul\",\"value\":26.3,\"unit\":\"claims\"},{\"label\":\"Adjusters active\",\"value\":4,\"unit\":\"adjusters\"}],\"confidence\":\"medium\"},{\"claim\":\"The slowdown is broad. Collision rose from 23 to 31 days, water damage from 37 to 54, theft from 31 to 43 and glass from 6 to 10.5. Repair shops don't explain it, because both preferred and non-preferred shops slowed (preferred 20 to 27 days, non-preferred 15.5 to 25).\",\"evidence_sql\":\"SELECT CASE WHEN report_date>=DATE '2026-05-01' THEN 'post' ELSE 'pre' END AS per, cause, count(*) AS n, median(close_date-report_date) AS med FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY ALL ORDER BY cause, per\",\"key_numbers\":[{\"label\":\"Collision median, before\",\"value\":23,\"unit\":\"days\"},{\"label\":\"Collision median, after\",\"value\":31,\"unit\":\"days\"},{\"label\":\"Water damage median, before\",\"value\":37,\"unit\":\"days\"},{\"label\":\"Water damage median, after\",\"value\":54,\"unit\":\"days\"}],\"confidence\":\"medium\"}],\"hypotheses\":[{\"hypothesis\":\"Adjuster attrition and a higher caseload per adjuster\",\"verdict\":\"supported\",\"evidence\":\"Two of six Southeast adjusters left in May, and the load per adjuster rose from about 16 to about 26 claims a month. The timing matches the slowdown. This is a correlation: the data can't prove the departures caused it.\"},{\"hypothesis\":\"A particular repair shop or network status\",\"verdict\":\"ruled_out\",\"evidence\":\"Preferred and non-preferred shops both slowed by about 7\u201310 days.\"},{\"hypothesis\":\"A shift in the mix of causes toward slower claim types\",\"verdict\":\"ruled_out\",\"evidence\":\"Most causes slowed individually. The share of slow bodily injury and liability claims did not rise (30 of 315 claims after, 33 of 379 before).\"},{\"hypothesis\":\"Data artifact or incomplete months\",\"verdict\":\"inconclusive\",\"evidence\":\"The May\u2013Jul figures are mostly complete, with 5\u201320 claims per month still open, so they slightly understate the true slowdown. Aug\u2013Sep figures are distorted because their slowest claims are still open. There were no duplicate rows.\"},{\"hypothesis\":\"Regional or company-wide slowdown\",\"verdict\":\"ruled_out\",\"evidence\":\"Median cycle times in the other regions stayed within a few days of their earlier levels.\"}],\"data_quality_issues\":[{\"issue\":\"Cycle time counts only closed claims, and recent report months have many claims still open (62 open for Aug and 114 for Sep in the Southeast).\",\"impact\":\"Aug\u2013Sep cycle times (28 and 9 days) look faster than they will end up. Don't read them as a recovery.\"},{\"issue\":\"Report volume in the Southeast rose in Aug\u2013Sep (143 and 135 claims, against about 100 a month before).\",\"impact\":\"Caseload per adjuster is even higher in those months. I didn't investigate the cause, and it may add to the backlog.\"}],\"charts\":[{\"title\":\"Southeast median days to close by report month, with claims per adjuster\",\"sql\":\"SELECT strftime(report_date,'%Y-%m') AS report_month, median(close_date-report_date) AS median_days_to_close FROM claims WHERE region='Southeast' AND report_date>=DATE '2026-01-01' AND report_date<DATE '2026-08-01' GROUP BY 1 ORDER BY 1\",\"type\":\"line\",\"x\":\"report_month\",\"y\":\"median_days_to_close\"}],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Review Southeast adjuster staffing and rebalance the open caseload\",\"reason\":\"Four adjusters are carrying the work of six. Their open backlog is growing (114 September-reported claims still open), and report volume is rising.\"}],\"open_questions\":[\"Was a replacement hire planned for the Southeast, and have the departed adjusters' claims been reassigned evenly?\",\"What is behind the jump in Southeast claim reports in Aug\u2013Sep 2026?\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

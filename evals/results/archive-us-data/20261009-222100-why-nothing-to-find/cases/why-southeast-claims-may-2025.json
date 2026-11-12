@@ -1,0 +1,333 @@
+{
+  "case_id": "why-southeast-claims-may-2025",
+  "question": "Southeast claims went up in May 2025 compared with April. What drove the increase?",
+  "role": "claims_ops_manager",
+  "grade": {
+    "passed": false,
+    "category": "unscored",
+    "reason": "Nothing to find: needs the LLM grader (Phase 3)."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Southeast claim count by loss month, using the agreed claim_count metric, for May 2025 against April 2025. I also checked claim frequency per 1,000 policies, which adjusts for changes in the number of policies. I did not use report date. Both months are well past the reporting lag.",
+    "answer": "The increase is real but very small, and it is within normal noise. Southeast claims rose from 90 in April to 93 in May 2025, which is +3 claims or about 3%. Frequency moved from 6.33 to 6.54 per 1,000 policies, which sits inside the Jan\u2013Aug 2025 range of 5.5 to 7.0. The only visible shift is collision, up from 33 to 40 (+7), partly offset by glass, down from 18 to 14 (-4). Other causes moved by 2 or fewer. The data doesn't support naming a specific driver. The one weather event in the period, a Houston hailstorm on 20\u201321 May, is in Texas and not the Southeast. There is no duplicate-row or incomplete-month problem for these months.",
+    "answer_sql": "SELECT date_trunc('month', loss_date)::DATE AS month, count(*) AS claims FROM claims WHERE region='Southeast' AND loss_date >= DATE '2025-04-01' AND loss_date < DATE '2025-06-01' GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "Southeast claims rose only slightly, 90 to 93 (+3). Collision +7 was the largest cause shift, offset by glass -4. Frequency is basically flat.",
+        "evidence_sql": "SELECT date_trunc('month', loss_date)::DATE AS month, cause, count(*) AS claims FROM claims WHERE region='Southeast' AND loss_date >= DATE '2025-04-01' AND loss_date < DATE '2025-06-01' GROUP BY 1,2 ORDER BY 2,1",
+        "key_numbers": [
+          {
+            "label": "April claims",
+            "value": 90,
+            "unit": "claims"
+          },
+          {
+            "label": "May claims",
+            "value": 93,
+            "unit": "claims"
+          },
+          {
+            "label": "Collision change",
+            "value": 7,
+            "unit": "claims"
+          },
+          {
+            "label": "Glass change",
+            "value": -4,
+            "unit": "claims"
+          },
+          {
+            "label": "April frequency",
+            "value": 6.33,
+            "unit": "per 1,000 policies"
+          },
+          {
+            "label": "May frequency",
+            "value": 6.54,
+            "unit": "per 1,000 policies"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "External weather event",
+        "verdict": "ruled_out",
+        "evidence": "The only event in Apr\u2013mid-Jun 2025 was a Houston, TX hailstorm. Southeast hail and wind_hail claims did not rise (hail 2 to 2, wind_hail 6 to 7)."
+      },
+      {
+        "hypothesis": "Growth in policies (exposure)",
+        "verdict": "ruled_out",
+        "evidence": "Frequency per 1,000 policies barely moved (6.33 to 6.54), so the policy count does not explain it."
+      },
+      {
+        "hypothesis": "Data problem (duplicates or incomplete month)",
+        "verdict": "ruled_out",
+        "evidence": "The claims data quality check found no duplicate rows. Only the latest months (about Sep 2026) are incomplete."
+      },
+      {
+        "hypothesis": "Normal variation",
+        "verdict": "supported",
+        "evidence": "A +3 claim change, with frequency inside its usual 5.5\u20137.0 range, is consistent with noise. The collision rise is small and offset by glass."
+      }
+    ],
+    "data_quality_issues": [],
+    "charts": [
+      {
+        "title": "Southeast claim frequency per 1,000 policies, 2025",
+        "sql": "SELECT c.m AS month, 1000.0*c.n/e.p AS frequency FROM (SELECT date_trunc('month', loss_date)::DATE m, count(*) n FROM claims WHERE region='Southeast' AND loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-08-31' GROUP BY 1) c JOIN (SELECT month m, sum(policies_in_force) p FROM exposure_monthly WHERE region='Southeast' GROUP BY 1) e USING (m) ORDER BY 1",
+        "type": "line",
+        "x": "month",
+        "y": "frequency"
+      }
+    ],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.032453,
+  "seconds": 14.77,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_count",
+        "dimensions": [
+          "cause"
+        ],
+        "filters": [
+          {
+            "dimension": "region",
+            "values": [
+              "Southeast"
+            ]
+          }
+        ],
+        "grain": "month",
+        "start": "2025-03-01",
+        "end": "2025-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, cause, count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-03-01'\n  AND loss_date <= DATE '2025-06-30'\n  AND region IN ('Southeast')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 35,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_frequency",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "region",
+            "values": [
+              "Southeast"
+            ]
+          }
+        ],
+        "grain": "month",
+        "start": "2025-01-01",
+        "end": "2025-08-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, count(*) AS value\n    FROM source\n    WHERE loss_date >= DATE '2025-01-01'\n      AND loss_date <= DATE '2025-08-31'\n      AND region IN ('Southeast')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT CAST(date_trunc('month', month) AS DATE) AS period, sum(policies_in_force) AS value\n    FROM source\n    WHERE month >= DATE '2025-01-01'\n      AND month <= DATE '2025-08-31'\n      AND region IN ('Southeast')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT period, 1000 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (period)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select * from weather_events where start_date between '2025-04-01' and '2025-06-15' order by start_date"
+      },
+      "source": "custom_query",
+      "sql": "select * from weather_events where start_date between '2025-04-01' and '2025-06-15' order by start_date",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-73b87f05d43c",
+      "run_id": "r-8300aa2bedb0",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 515,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 175,
+      "cost_usd": 0.007175,
+      "seconds": 3.73,
+      "request_id": "req_011CfraL52XpH9CbLbZYEjrh"
+    },
+    {
+      "session_id": "s-73b87f05d43c",
+      "run_id": "r-8300aa2bedb0",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1581,
+      "cache_read_input_tokens": 8070,
+      "cache_creation_input_tokens": 3140,
+      "cost_usd": 0.025278,
+      "seconds": 10.71,
+      "request_id": "req_011CfraLM8QE9KMXfaPGV55L"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-73b87f05d43c",
+  "run_id": "r-8300aa2bedb0",
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims operations manager. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Southeast claims went up in May 2025 compared with April. What drove the increase?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Em1enD4AH3zTkhz8NJKT3e",
+          "input": {
+            "metric": "claim_count",
+            "dimensions": [
+              "cause"
+            ],
+            "filters": [
+              {
+                "dimension": "region",
+                "values": [
+                  "Southeast"
+                ]
+              }
+            ],
+            "grain": "month",
+            "start": "2025-03-01",
+            "end": "2025-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_0141STpFdPLDvAYgkr8B646b",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_017if3odirb5aSuW8yEYT4Tz",
+          "input": {
+            "metric": "claim_frequency",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "region",
+                "values": [
+                  "Southeast"
+                ]
+              }
+            ],
+            "grain": "month",
+            "start": "2025-01-01",
+            "end": "2025-08-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01TWHcrdq9qAksKwQ5BbmPzd",
+          "input": {
+            "sql": "select * from weather_events where start_date between '2025-04-01' and '2025-06-15' order by start_date"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Em1enD4AH3zTkhz8NJKT3e",
+          "content": "{\"metric\": \"claim_count\", \"label\": \"Claim count\", \"unit\": \"claims\", \"definition\": \"count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, cause, count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-03-01'\\n  AND loss_date <= DATE '2025-06-30'\\n  AND region IN ('Southeast')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"cause\", \"value\"], \"rows\": [[\"2025-03-01\", \"bodily_injury\", 9], [\"2025-03-01\", \"collision\", 35], [\"2025-03-01\", \"fire\", 2], [\"2025-03-01\", \"glass\", 14], [\"2025-03-01\", \"hail\", 3], [\"2025-03-01\", \"theft\", 6], [\"2025-03-01\", \"water_damage\", 12], [\"2025-03-01\", \"wind_hail\", 8], [\"2025-04-01\", \"bodily_injury\", 7], [\"2025-04-01\", \"collision\", 33], [\"2025-04-01\", \"fire\", 2], [\"2025-04-01\", \"glass\", 18], [\"2025-04-01\", \"hail\", 2], [\"2025-04-01\", \"liability\", 2], [\"2025-04-01\", \"theft\", 10], [\"2025-04-01\", \"water_damage\", 10], [\"2025-04-01\", \"wind_hail\", 6], [\"2025-05-01\", \"bodily_injury\", 9], [\"2025-05-01\", \"collision\", 40], [\"2025-05-01\", \"fire\", 2], [\"2025-05-01\", \"glass\", 14], [\"2025-05-01\", \"hail\", 2], [\"2025-05-01\", \"liability\", 1], [\"2025-05-01\", \"theft\", 8], [\"2025-05-01\", \"water_damage\", 10], [\"2025-05-01\", \"wind_hail\", 7], [\"2025-06-01\", \"bodily_injury\", 6], [\"2025-06-01\", \"collision\", 37], [\"2025-06-01\", \"fire\", 4], [\"2025-06-01\", \"glass\", 14], [\"2025-06-01\", \"hail\", 8], [\"2025-06-01\", \"liability\", 3], [\"2025-06-01\", \"theft\", 10], [\"2025-06-01\", \"water_damage\", 6], [\"2025-06-01\", \"wind_hail\", 3]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0141STpFdPLDvAYgkr8B646b",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017if3odirb5aSuW8yEYT4Tz",
+          "content": "{\"metric\": \"claim_frequency\", \"label\": \"Claim frequency\", \"unit\": \"claims per 1,000 policies per month\", \"definition\": \"1000 * claim_count / policy_months\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, count(*) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2025-01-01'\\n      AND loss_date <= DATE '2025-08-31'\\n      AND region IN ('Southeast')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT CAST(date_trunc('month', month) AS DATE) AS period, sum(policies_in_force) AS value\\n    FROM source\\n    WHERE month >= DATE '2025-01-01'\\n      AND month <= DATE '2025-08-31'\\n      AND region IN ('Southeast')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT period, 1000 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (period)\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 5.7867838325728185], [\"2025-02-01\", 7.040195999056614], [\"2025-03-01\", 6.259327452847572], [\"2025-04-01\", 6.330850233186316], [\"2025-05-01\", 6.536554097365136], [\"2025-06-01\", 6.394594248940852], [\"2025-07-01\", 5.483600869783461], [\"2025-08-01\", 6.402922547152951]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01TWHcrdq9qAksKwQ5BbmPzd",
+          "content": "{\"columns\": [\"event_id\", \"state\", \"area\", \"event_type\", \"start_date\", \"end_date\", \"severity\"], \"rows\": [[\"WX-001\", \"TX\", \"Houston\", \"hailstorm\", \"2025-05-20\", \"2025-05-21\", \"moderate\"]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSxQYKEAgSGAI4AUIIdGhpbmtpbmcSDFpD5sWZkq+LW1PinhoMScHiBLO+0Q02cEd9IjAwOqoh5WnUDt8C3omzr/V/aft4LygJUIOt4xXjQKHE/RrAVT3+1LWFkLFuVIFWW+oq4gXjMGtEAvT8O2wHZta5GYw3rBIcCdesV9khIuq+OosYYbufw1PZHd76EIOKCnomufLHG1NJ08voFlewz9vsjySJN2W4zHhs4a3Rg+r4VW69xOR9MywD6kHJXxxXS4k55ywK1yU1gjVZ8gpyoYPrT0WKDH/R4D+fTKN/Yaa+xz1MNwhIZ7PU4wTsbbEXN1sSmgBf7NYz+VgR5gItmJ6kxFuKj3+RcXYoo5s0257rdtO70Z/jWUWx8S148eihAnL0hC9PQphV+7zv+5p7Wb7+FpG9dF//SXPU03yPFLEmYfdod1KM5ca9/hyIYRJlKQqlpq2S4uwv4t2XAwpTFTuapOXZL+HSbJUOp5bv4/OW0hzb9AAlK+2CcjdObbirtjpWOjiDIPaHXQDB14KYCCg+slsfy1Y0wSgV5XCBoErPd2FC0MIRoO5PmTbbF2F7Jp+t2shJ1gL9Kw1rToIHVmsnwuHYxcFo2aHjX6OQjZcH4T4+NbcRcWOCBSTPTE0WY9M/UBSvMLo1vipurChIdMdQYFO51v4pWcIs2i8LFQeBpzAVJxmEr68tQkcQYkLhoqZZDqnYcNINNGe+qa+LYhSCTZVfGR/3f6MbWJBQYDln/r9yNTvpbzHBXQT5xRFx0hRVNDD32RSN+FkCFPSCUzDgdCACeCZVEFemNCbuxgReOWB49SROERARuaBbbJIZ8pQEfP3bEZfm/YVU8PxHuTrsbxkU7+Ptx8ZQx3Xs1bou4iP896YwxbOzGuCUwATy+kYG3KmFF4ZPDJhArJU6cQ+JGmeN0S04f3mnY+M6YMz/3pTwtXZg3Pk1MXUWIIMtoS7Y+EeZ3dwasfbZrimry100qXG3qzX7SVWooUdH1ELeOSQh6X0dE9YPfwOT0CeMzNaFhznXEbKereXF0FYGabLqDk1PQvqYcDp/e+Zwp4ZGZ5PpT1pZVNJL1i7dZ2AMARHfn2Hw2Y6hL753eFALdmT2yWIKruMYAQ==",
+          "thinking": "April totals 90 versus May's 93 \u2014 only a 3% uptick, basically noise, with collision claims up slightly and glass claims down; the Texas event doesn't affect the Southeast numbers. Now I'll write the SQL for the answer.\n\n",
+          "type": "thinking"
+        },
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Southeast claim count by loss month, using the agreed claim_count metric, for May 2025 against April 2025. I also checked claim frequency per 1,000 policies, which adjusts for changes in the number of policies. I did not use report date. Both months are well past the reporting lag.\",\"answer\":\"The increase is real but very small, and it is within normal noise. Southeast claims rose from 90 in April to 93 in May 2025, which is +3 claims or about 3%. Frequency moved from 6.33 to 6.54 per 1,000 policies, which sits inside the Jan\u2013Aug 2025 range of 5.5 to 7.0. The only visible shift is collision, up from 33 to 40 (+7), partly offset by glass, down from 18 to 14 (-4). Other causes moved by 2 or fewer. The data doesn't support naming a specific driver. The one weather event in the period, a Houston hailstorm on 20\u201321 May, is in Texas and not the Southeast. There is no duplicate-row or incomplete-month problem for these months.\",\"answer_sql\":\"SELECT date_trunc('month', loss_date)::DATE AS month, count(*) AS claims FROM claims WHERE region='Southeast' AND loss_date >= DATE '2025-04-01' AND loss_date < DATE '2025-06-01' GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"Southeast claims rose only slightly, 90 to 93 (+3). Collision +7 was the largest cause shift, offset by glass -4. Frequency is basically flat.\",\"evidence_sql\":\"SELECT date_trunc('month', loss_date)::DATE AS month, cause, count(*) AS claims FROM claims WHERE region='Southeast' AND loss_date >= DATE '2025-04-01' AND loss_date < DATE '2025-06-01' GROUP BY 1,2 ORDER BY 2,1\",\"key_numbers\":[{\"label\":\"April claims\",\"value\":90,\"unit\":\"claims\"},{\"label\":\"May claims\",\"value\":93,\"unit\":\"claims\"},{\"label\":\"Collision change\",\"value\":7,\"unit\":\"claims\"},{\"label\":\"Glass change\",\"value\":-4,\"unit\":\"claims\"},{\"label\":\"April frequency\",\"value\":6.33,\"unit\":\"per 1,000 policies\"},{\"label\":\"May frequency\",\"value\":6.54,\"unit\":\"per 1,000 policies\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"External weather event\",\"verdict\":\"ruled_out\",\"evidence\":\"The only event in Apr\u2013mid-Jun 2025 was a Houston, TX hailstorm. Southeast hail and wind_hail claims did not rise (hail 2 to 2, wind_hail 6 to 7).\"},{\"hypothesis\":\"Growth in policies (exposure)\",\"verdict\":\"ruled_out\",\"evidence\":\"Frequency per 1,000 policies barely moved (6.33 to 6.54), so the policy count does not explain it.\"},{\"hypothesis\":\"Data problem (duplicates or incomplete month)\",\"verdict\":\"ruled_out\",\"evidence\":\"The claims data quality check found no duplicate rows. Only the latest months (about Sep 2026) are incomplete.\"},{\"hypothesis\":\"Normal variation\",\"verdict\":\"supported\",\"evidence\":\"A +3 claim change, with frequency inside its usual 5.5\u20137.0 range, is consistent with noise. The collision rise is small and offset by glass.\"}],\"data_quality_issues\":[],\"charts\":[{\"title\":\"Southeast claim frequency per 1,000 policies, 2025\",\"sql\":\"SELECT c.m AS month, 1000.0*c.n/e.p AS frequency FROM (SELECT date_trunc('month', loss_date)::DATE m, count(*) n FROM claims WHERE region='Southeast' AND loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-08-31' GROUP BY 1) c JOIN (SELECT month m, sum(policies_in_force) p FROM exposure_monthly WHERE region='Southeast' GROUP BY 1) e USING (m) ORDER BY 1\",\"type\":\"line\",\"x\":\"month\",\"y\":\"frequency\"}],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

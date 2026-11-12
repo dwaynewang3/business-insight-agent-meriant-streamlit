@@ -1,0 +1,739 @@
+{
+  "case_id": "why-california-home-claims",
+  "repeat": 1,
+  "question": "Why were California home claims so much higher in the first half of 2026 than a year earlier?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "California home claims counted by loss date, Jan\u2013Jun 2026 versus Jan\u2013Jun 2025, using claim count, claim frequency (claims per 1,000 policy-months), severity (incurred per claim, paid plus reserve) and loss ratio. The latest months aren't in the comparison, so late reporting doesn't affect it.",
+    "answer": "The increase is real: 122 claims in H1 2026 against 79 in H1 2025, up 54%. It comes from a bigger book, not riskier policies. Home policy-months in California rose from about 17,900 to 27,500 (+54%). The cause is a large batch of partner-channel policies that started in January 2026, about 530 a month in total across LA, San Diego and the Bay Area. Claim frequency was flat at 4.41 against 4.43 per 1,000 policy-months. Partner policies produced 40 of the 122 claims. Claims from all other channels were 82, almost the same as the 79 a year earlier. There was no California weather event in the weather table. Cost per claim also rose, from about $11.8k to $15.4k, and the loss ratio went from 0.40 to 0.53. That rise is not from the partner book. Partner claims average about $11.0k, while the non-partner claims average about $17.6k, up from $11.8k. The non-partner rise is concentrated in a few large water_damage and wind_hail claims in LA and San Diego, and it is a small sample, so I can't say whether it is more than noise.",
+    "answer_sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h",
+    "findings": [
+      {
+        "claim": "Claim count rose 54% while exposure rose by about the same amount, so frequency was flat. Severity and loss ratio increased.",
+        "evidence_sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h",
+        "key_numbers": [
+          {
+            "label": "H1 2025 claims",
+            "value": 79,
+            "unit": "claims"
+          },
+          {
+            "label": "H1 2026 claims",
+            "value": 122,
+            "unit": "claims"
+          },
+          {
+            "label": "H1 2025 frequency",
+            "value": 4.41,
+            "unit": "per 1,000 policy-months"
+          },
+          {
+            "label": "H1 2026 frequency",
+            "value": 4.43,
+            "unit": "per 1,000 policy-months"
+          },
+          {
+            "label": "H1 2025 loss ratio",
+            "value": 0.401,
+            "unit": "ratio"
+          },
+          {
+            "label": "H1 2026 loss ratio",
+            "value": 0.53,
+            "unit": "ratio"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Partner-channel policies began in January 2026, about 530 new a month. Claims from other channels were flat, and partner claims have lower severity.",
+        "evidence_sql": "SELECT h, ch, n, sev FROM (SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL) ORDER BY 1,2",
+        "key_numbers": [
+          {
+            "label": "Non-partner claims H1 2025",
+            "value": 79,
+            "unit": "claims"
+          },
+          {
+            "label": "Non-partner claims H1 2026",
+            "value": 82,
+            "unit": "claims"
+          },
+          {
+            "label": "Partner claims H1 2026",
+            "value": 40,
+            "unit": "claims"
+          },
+          {
+            "label": "Non-partner severity H1 2025",
+            "value": 11801,
+            "unit": "USD"
+          },
+          {
+            "label": "Non-partner severity H1 2026",
+            "value": 17615,
+            "unit": "USD"
+          },
+          {
+            "label": "Partner severity H1 2026",
+            "value": 11002,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Mix of business change: a new partner-channel book",
+        "verdict": "supported",
+        "evidence": "Partner policies went from none to about 530 new a month from January 2026. Exposure and claims grew about 54%, and frequency didn't change."
+      },
+      {
+        "hypothesis": "Higher underlying claim frequency",
+        "verdict": "ruled_out",
+        "evidence": "Frequency was 4.41 against 4.43 per 1,000 policy-months."
+      },
+      {
+        "hypothesis": "External weather event",
+        "verdict": "ruled_out",
+        "evidence": "The weather_events table has no California events."
+      },
+      {
+        "hypothesis": "Data problem such as duplicated rows or an incomplete period",
+        "verdict": "ruled_out",
+        "evidence": "There are no duplicate claim rows, and the compared periods (Jan\u2013Jun) are old enough to be complete."
+      },
+      {
+        "hypothesis": "Higher severity on existing business",
+        "verdict": "inconclusive",
+        "evidence": "Non-partner severity rose from $11.8k to $17.6k, driven by a few large water_damage and wind_hail claims. The sample is small, so noise can't be ruled out."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "There are 15 extreme reserve_amount outliers across the warehouse, up to $178k.",
+        "impact": "A few large reserves can move severity and loss ratio in a small segment like California home."
+      }
+    ],
+    "charts": [
+      {
+        "title": "California home claims by loss month",
+        "sql": "SELECT strftime(date_trunc('month', loss_date),'%Y-%m') AS month, count(*) AS claims FROM claims WHERE region='California' AND product='home' GROUP BY 1 ORDER BY 1",
+        "type": "line",
+        "x": "month",
+        "y": "claims"
+      }
+    ],
+    "proposed_actions": [],
+    "open_questions": [
+      "Should the partner book's loss ratio be tracked as its own segment as it matures?"
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.101775,
+  "seconds": 41.18,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_count",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "region",
+            "values": [
+              "California"
+            ]
+          },
+          {
+            "dimension": "product",
+            "values": [
+              "home"
+            ]
+          }
+        ],
+        "grain": "month",
+        "start": "2025-01-01",
+        "end": "2026-09-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-01-01'\n  AND loss_date <= DATE '2026-09-30'\n  AND region IN ('California')\n  AND product IN ('home')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_count"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT p.metro, c.cause, CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, round(sum(coalesce(pay.paid,0)+c.reserve_amount)) inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR (c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2,3"
+      },
+      "source": "custom_query",
+      "sql": "SELECT p.metro, c.cause, CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, round(sum(coalesce(pay.paid,0)+c.reserve_amount)) inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR (c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2,3",
+      "rows": 28,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT * FROM weather_events WHERE state='CA' ORDER BY start_date"
+      },
+      "source": "custom_query",
+      "sql": "SELECT * FROM weather_events WHERE state='CA' ORDER BY start_date",
+      "rows": 0,
+      "truncated": false
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "policies_in_force",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "region",
+            "values": [
+              "California"
+            ]
+          },
+          {
+            "dimension": "product",
+            "values": [
+              "home"
+            ]
+          }
+        ],
+        "grain": "quarter",
+        "start": "2025-01-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT * FROM exposure_monthly\n)\nSELECT CAST(date_trunc('quarter', month) AS DATE) AS period, sum(policies_in_force) / count(DISTINCT month) AS value\nFROM source\nWHERE month >= DATE '2025-01-01'\n  AND month <= DATE '2026-06-30'\n  AND region IN ('California')\n  AND product IN ('home')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 6,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND month BETWEEN '2025-01-01' AND '2026-06-01' AND (month<='2025-06-01' OR month>='2026-01-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, pm, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) sev, round(inc/ep,3) lr FROM c JOIN e USING(h) ORDER BY h"
+      },
+      "source": "custom_query",
+      "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND month BETWEEN '2025-01-01' AND '2026-06-01' AND (month<='2025-06-01' OR month>='2026-01-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, pm, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) sev, round(inc/ep,3) lr FROM c JOIN e USING(h) ORDER BY h",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT channel, metro, strftime(start_date,'%Y-%m') m, count(*) n FROM policies WHERE region='California' AND product='home' AND start_date>='2025-10-01' GROUP BY ALL ORDER BY 3,1,2"
+      },
+      "source": "custom_query",
+      "sql": "SELECT channel, metro, strftime(start_date,'%Y-%m') m, count(*) n FROM policies WHERE region='California' AND product='home' AND start_date>='2025-10-01' GROUP BY ALL ORDER BY 3,1,2",
+      "rows": 129,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2"
+      },
+      "source": "custom_query",
+      "sql": "SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT h, ch, n, sev FROM (SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL) ORDER BY 1,2"
+      },
+      "source": "custom_query",
+      "sql": "SELECT h, ch, n, sev FROM (SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL) ORDER BY 1,2",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h"
+      },
+      "source": "custom_query",
+      "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h",
+      "rows": 2,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 302,
+      "cache_read_input_tokens": 8085,
+      "cache_creation_input_tokens": 174,
+      "cost_usd": 0.00508,
+      "seconds": 3.08,
+      "request_id": "req_011Cg3vz1Nvs138JTmRY65N3"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 696,
+      "cache_read_input_tokens": 8259,
+      "cache_creation_input_tokens": 1803,
+      "cost_usd": 0.013123,
+      "seconds": 5.37,
+      "request_id": "req_011Cg3vzEkbSQTGKGy1eMdgd"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 697,
+      "cache_read_input_tokens": 10062,
+      "cache_creation_input_tokens": 2077,
+      "cost_usd": 0.014179,
+      "seconds": 4.58,
+      "request_id": "req_011Cg3vzdquxEynSkxm7LncP"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 434,
+      "cache_read_input_tokens": 12139,
+      "cache_creation_input_tokens": 3786,
+      "cost_usd": 0.016237,
+      "seconds": 3.79,
+      "request_id": "req_011Cg3vzydnnH53k3FhRyZy4"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 439,
+      "cache_read_input_tokens": 15925,
+      "cache_creation_input_tokens": 530,
+      "cost_usd": 0.008904,
+      "seconds": 3.39,
+      "request_id": "req_011Cg3w1FvppoqTNjZguwkjE"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 523,
+      "cache_read_input_tokens": 16455,
+      "cache_creation_input_tokens": 535,
+      "cost_usd": 0.009862,
+      "seconds": 3.31,
+      "request_id": "req_011Cg3w1WaNgLkVckpYQvGup"
+    },
+    {
+      "session_id": "s-daa6c840042c",
+      "run_id": "r-a4e6912e8138",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2937,
+      "cache_read_input_tokens": 16990,
+      "cache_creation_input_tokens": 647,
+      "cost_usd": 0.03439,
+      "seconds": 17.13,
+      "request_id": "req_011Cg3w1ktMpRTgJWz9wa2uw"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-daa6c840042c",
+  "run_id": "r-a4e6912e8138",
+  "numbers": {
+    "checked": 12,
+    "confirmed": 12,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f6318acbf",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why were California home claims so much higher in the first half of 2026 than a year earlier?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01VFUayExexHPK5C7yeZYxgB",
+          "input": {
+            "metric": "claim_count",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "region",
+                "values": [
+                  "California"
+                ]
+              },
+              {
+                "dimension": "product",
+                "values": [
+                  "home"
+                ]
+              }
+            ],
+            "grain": "month",
+            "start": "2025-01-01",
+            "end": "2026-09-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01GLiC9C86CpxU9p6nnMkmxP",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01KZTXLmb1so7sRnMMPipneR",
+          "input": {
+            "name": "claim_count"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VFUayExexHPK5C7yeZYxgB",
+          "content": "{\"metric\": \"claim_count\", \"label\": \"Claim count\", \"unit\": \"claims\", \"definition\": \"count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-01-01'\\n  AND loss_date <= DATE '2026-09-30'\\n  AND region IN ('California')\\n  AND product IN ('home')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 15], [\"2025-02-01\", 6], [\"2025-03-01\", 7], [\"2025-04-01\", 13], [\"2025-05-01\", 25], [\"2025-06-01\", 13], [\"2025-07-01\", 14], [\"2025-08-01\", 10], [\"2025-09-01\", 12], [\"2025-10-01\", 8], [\"2025-11-01\", 8], [\"2025-12-01\", 23], [\"2026-01-01\", 12], [\"2026-02-01\", 10], [\"2026-03-01\", 12], [\"2026-04-01\", 25], [\"2026-05-01\", 26], [\"2026-06-01\", 37], [\"2026-07-01\", 36], [\"2026-08-01\", 33], [\"2026-09-01\", 19]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01GLiC9C86CpxU9p6nnMkmxP",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01KZTXLmb1so7sRnMMPipneR",
+          "content": "{\"name\": \"claim_count\", \"label\": \"Claim count\", \"description\": \"Number of claims, counted by loss date.\", \"unit\": \"claims\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"count(*) over claim_facts\", \"time_column\": \"loss_date\", \"notes\": \"Claims are often reported days or weeks after the loss, so the most recent weeks keep filling in as late reports arrive.\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS5wUKEAgSGAI4AUIIdGhpbmtpbmcSDKPrBundjxLboaNn7xoM25p0Gs55C9/sDkA0IjDXGECA9iAJgTdXwrnkXTxfHr7n4Ivr2OqzKp9YBOBTAf6t91eH1N7wIjqXBrn7NdEqhAVDBmPQ+8aUDtuL9laBBOnZ2TkQGBvT4RsLzdL6CSXQ8C/nDwA1Gm1XEWNcxoIoz63LkIUY7xd50iUg4BPsz+zxTAw4V/oaf2ZLC9P7bb/DAZaYI/vDc9MFReA55pR0+oah69mg5oG/n6DnwlMLZGk7ii1OD+vqYx7kFRl5VmD407wbjQ0Zg1ujrKs3QacnlsqG4V7Ko44RviY/uWo7xYVzGeh5P+TmsAVhaUtEJoFoLNmM5VQ2LDy22id0nmmXwP59IzqKYwQyYBacRWeLx5TO2ru0Drcq00WF257GSJXuR0pKkhPY/LkBRQKO8zgcuZgQHYgR5z8zlNH2FxtMFqvYZfU4IPaEnijmKag+0ZNgl8ED/N4BxtQjqUJxOy2bfIqHfr/6nHmPwF4OkMMpjzweRRLBc40myTkyJZMlhZL/KKC2R/FkMjD8ehQqMKDJdmowz3i5cvRbkTCn7qHj4e1iVkEjHxEJZiOthVNPGTynsax4dhgjr1hjOX2ea0ogo3OgxkPqmv5my2yyZkokoLlqY2iAS/q1NSL0aVakrdXMJm7d1+mOijXyc6PwOOgK1wJH21jlce6nm9c3N7Aer3djnPzIDvUK7spkFQA5qpvGoz6Gy8tZb315Jb78t1AsIO74+JuXL77i7Pyzsbwi7tTv9jthLdppNOeO566IfTCNIlndfX9w5sQ4zPJJ6rWUd/e7UptRhLlIU2weTgo9tTtWbqWQ5isp9trGiO4pEhb+MPm9SeXH17is9Qd4zjJVFWXl+3ylvmLr+lB0PA3oluVaNTw32wFAAOwtUKODVvDJFLF0s1Fgq8ri4ck3+KksacFW1Tlnk/gsfZWO7r3BrwAbEXJ+kxgB",
+          "thinking": "Totaling the claims, H1 2025 comes to 79 versus 122 in H1 2026, a clear increase. I should break this down further by cause, metro area, incurred amounts, exposure, and weather factors.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01BJui8g54zQWUJDnm5yhtLd",
+          "input": {
+            "sql": "SELECT p.metro, c.cause, CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, round(sum(coalesce(pay.paid,0)+c.reserve_amount)) inc FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR (c.region='California' AND c.product='home' AND c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2,3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Kepoa5hTMJdcvRw915ZGKk",
+          "input": {
+            "sql": "SELECT * FROM weather_events WHERE state='CA' ORDER BY start_date"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01XPgzsX4RKpkJzr2zDfHrt1",
+          "input": {
+            "metric": "policies_in_force",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "region",
+                "values": [
+                  "California"
+                ]
+              },
+              {
+                "dimension": "product",
+                "values": [
+                  "home"
+                ]
+              }
+            ],
+            "grain": "quarter",
+            "start": "2025-01-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01BJui8g54zQWUJDnm5yhtLd",
+          "content": "{\"columns\": [\"metro\", \"cause\", \"h\", \"n\", \"inc\"], \"rows\": [[\"Los Angeles\", \"fire\", \"2025H1\", 2, 146954.0], [\"Los Angeles\", \"fire\", \"2026H1\", 4, 169577.0], [\"Los Angeles\", \"liability\", \"2025H1\", 1, 0.0], [\"Los Angeles\", \"liability\", \"2026H1\", 4, 51002.0], [\"Los Angeles\", \"theft\", \"2025H1\", 5, 16681.0], [\"Los Angeles\", \"theft\", \"2026H1\", 4, 16080.0], [\"Los Angeles\", \"water_damage\", \"2025H1\", 16, 220621.0], [\"Los Angeles\", \"water_damage\", \"2026H1\", 29, 329827.0], [\"Los Angeles\", \"wind_hail\", \"2025H1\", 7, 95735.0], [\"Los Angeles\", \"wind_hail\", \"2026H1\", 18, 348843.0], [\"San Diego\", \"fire\", \"2026H1\", 2, 32182.0], [\"San Diego\", \"liability\", \"2025H1\", 3, 41027.0], [\"San Diego\", \"liability\", \"2026H1\", 3, 85453.0], [\"San Diego\", \"theft\", \"2025H1\", 4, 23434.0], [\"San Diego\", \"theft\", \"2026H1\", 4, 33456.0], [\"San Diego\", \"water_damage\", \"2025H1\", 10, 56163.0], [\"San Diego\", \"water_damage\", \"2026H1\", 21, 264622.0], [\"San Diego\", \"wind_hail\", \"2025H1\", 10, 116622.0], [\"San Diego\", \"wind_hail\", \"2026H1\", 10, 197954.0], [\"San Francisco Bay Area\", \"fire\", \"2025H1\", 1, 12854.0], [\"San Francisco Bay Area\", \"fire\", \"2026H1\", 2, 111594.0], [\"San Francisco Bay Area\", \"liability\", \"2026H1\", 2, 45210.0], [\"San Francisco Bay Area\", \"theft\", \"2025H1\", 4, 9937.0], [\"San Francisco Bay Area\", \"theft\", \"2026H1\", 2, 16985.0], [\"San Francisco Bay Area\", \"water_damage\", \"2025H1\", 12, 127073.0], [\"San Francisco Bay Area\", \"water_damage\", \"2026H1\", 11, 106222.0], [\"San Francisco Bay Area\", \"wind_hail\", \"2025H1\", 4, 65198.0], [\"San Francisco Bay Area\", \"wind_hail\", \"2026H1\", 6, 75533.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Kepoa5hTMJdcvRw915ZGKk",
+          "content": "{\"columns\": [\"event_id\", \"state\", \"area\", \"event_type\", \"start_date\", \"end_date\", \"severity\"], \"rows\": [], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01XPgzsX4RKpkJzr2zDfHrt1",
+          "content": "{\"metric\": \"policies_in_force\", \"label\": \"Policies in force\", \"unit\": \"policies\", \"definition\": \"sum(policies_in_force) / count(DISTINCT month) over exposure\", \"sql\": \"WITH source AS (\\n    SELECT * FROM exposure_monthly\\n)\\nSELECT CAST(date_trunc('quarter', month) AS DATE) AS period, sum(policies_in_force) / count(DISTINCT month) AS value\\nFROM source\\nWHERE month >= DATE '2025-01-01'\\n  AND month <= DATE '2026-06-30'\\n  AND region IN ('California')\\n  AND product IN ('home')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 2978.2999999999997], [\"2025-04-01\", 2997.6866666666665], [\"2025-07-01\", 2985.9666666666667], [\"2025-10-01\", 2995.4833333333336], [\"2026-01-01\", 3802.7466666666664], [\"2026-04-01\", 5376.596666666667]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSvwYKEAgSGAI4AUIIdGhpbmtpbmcSDAP+P81baHSl5WQCJBoMcqRWO/cqpCOEzytbIjDaGHwJ2EDvJiKgbXz286JxSSMihf+uW9xunrZxyG1dXbVt3ZEWq4oYOC59L9gI6zsq3AUkCn6tmdyWtG0V00KxnoYfU0KnfeFx8YIEDBYIbyCcVOlpAEqHZmBbCrf1iWNOzheT8EKaGCci81GnR/HnzRruPvkMwck7QapMSEHW5jBUoC81e2fo4dzmLLErJK0TdzSZVev/u2XNlVXKQjltFS2gctw9IYa6pwrMZXD+4rSg+cdwKo8HumMsTEk8yfNLsaHcAroQbytFPwzQApYer+h85pHhFJNEKZYxDrwKkWhN3K6RVlcKgXoWnV/p0N6iR1StImEr6cKtM2x76EgD/HjFuz/7osrYRbuqQRwKeoXekA63vgZBtjn03tVWXrIY5lDzd/CenEhfOlUKjn7wTVh4+8pCeXghCpAfwv0h7r2yyD72VFFyerVsj6zCuWwfF40KxkcSdGmkEyyR5ixETO/lEoC8SpDJD4pZ2207pYiCdjI5DsnHBUQlwKbuJgcVKfJdQBJPF1Td3qPed5zNRlYAn66CfUns69FuVCs9/VvceKhAM6uVIFTXhFmNuBXWVEpvz0LOY9LgW/AV8fi+vyWprSi3MROb4/MzO/xCx+YicIbnVXP+U7/olNHGcd9wu1qZi+oimZY53DqaAok77gMgyew5wEUzqrkSRYa7pj7Eokt3jBzvXhOXEx/hTNZM3FAO27mAnvh8stXRccs8zTV0bZfmcRIxIbN5IzOeXcJvzupp4/tKZFshVwZNin/pr0iRVRDiEYvmDraxCV/btGVjSup9nKoADsqckjihwUtUgfRqHpFM6em/+ZtSYn4klWvcdpU8BdkMaMWrIqLCWDeBPsJHkyOWq0AxH60S7osXmev4oah+Mm7vAs9Ivoptd6TF06aSEpgiFKCs1ik7MPgKQxLdYv1umNhApJKkbTHX/lFoen6+0jrsFf9IhBG//SvmNlKsyj+wK0w6waXWSXu8Dr6eLa6NTEy7qimjrxultSOqavit2z3IoF4ytMFkn+z2ac8GMUqv3nC7HDsYAQ==",
+          "thinking": "Policies in force jumped from 3000 to 5400, a big exposure increase, while frequency looks roughly flat. I should compute frequency more precisely and break it down by channel and new policies to confirm this holds.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01AP5xjvNGrC8P7sis3CBFLd",
+          "input": {
+            "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND month BETWEEN '2025-01-01' AND '2026-06-01' AND (month<='2025-06-01' OR month>='2026-01-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, pm, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) sev, round(inc/ep,3) lr FROM c JOIN e USING(h) ORDER BY h"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01SFzyekEaQLAsikF5iHffV1",
+          "input": {
+            "sql": "SELECT channel, metro, strftime(start_date,'%Y-%m') m, count(*) n FROM policies WHERE region='California' AND product='home' AND start_date>='2025-10-01' GROUP BY ALL ORDER BY 3,1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01AP5xjvNGrC8P7sis3CBFLd",
+          "content": "{\"columns\": [\"h\", \"n\", \"pm\", \"freq_per_1000_pm\", \"sev\", \"lr\"], \"rows\": [[\"2025H1\", 79, 17927.96, 4.41, 11801.0, 0.401], [\"2026H1\", 122, 27538.03, 4.43, 15447.0, 0.53]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01SFzyekEaQLAsikF5iHffV1",
+          "content": "{\"columns\": [\"channel\", \"metro\", \"m\", \"n\"], \"rows\": [[\"agent\", \"Los Angeles\", \"2025-10\", 12], [\"agent\", \"San Diego\", \"2025-10\", 3], [\"agent\", \"San Francisco Bay Area\", \"2025-10\", 2], [\"direct\", \"Los Angeles\", \"2025-10\", 4], [\"direct\", \"San Diego\", \"2025-10\", 3], [\"direct\", \"San Francisco Bay Area\", \"2025-10\", 1], [\"online\", \"Los Angeles\", \"2025-10\", 4], [\"online\", \"San Diego\", \"2025-10\", 3], [\"online\", \"San Francisco Bay Area\", \"2025-10\", 1], [\"agent\", \"Los Angeles\", \"2025-11\", 14], [\"agent\", \"San Diego\", \"2025-11\", 6], [\"agent\", \"San Francisco Bay Area\", \"2025-11\", 7], [\"direct\", \"Los Angeles\", \"2025-11\", 7], [\"direct\", \"San Diego\", \"2025-11\", 3], [\"direct\", \"San Francisco Bay Area\", \"2025-11\", 2], [\"online\", \"Los Angeles\", \"2025-11\", 1], [\"online\", \"San Diego\", \"2025-11\", 1], [\"online\", \"San Francisco Bay Area\", \"2025-11\", 1], [\"agent\", \"Los Angeles\", \"2025-12\", 5], [\"agent\", \"San Diego\", \"2025-12\", 2], [\"agent\", \"San Francisco Bay Area\", \"2025-12\", 3], [\"direct\", \"Los Angeles\", \"2025-12\", 8], [\"direct\", \"San Diego\", \"2025-12\", 3], [\"online\", \"Los Angeles\", \"2025-12\", 3], [\"online\", \"San Diego\", \"2025-12\", 3], [\"agent\", \"Los Angeles\", \"2026-01\", 3], [\"agent\", \"San Diego\", \"2026-01\", 4], [\"agent\", \"San Francisco Bay Area\", \"2026-01\", 2], [\"direct\", \"Los Angeles\", \"2026-01\", 4], [\"direct\", \"San Diego\", \"2026-01\", 3], [\"direct\", \"San Francisco Bay Area\", \"2026-01\", 2], [\"online\", \"Los Angeles\", \"2026-01\", 1], [\"online\", \"San Diego\", \"2026-01\", 1], [\"online\", \"San Francisco Bay Area\", \"2026-01\", 2], [\"partner\", \"Los Angeles\", \"2026-01\", 246], [\"partner\", \"San Diego\", \"2026-01\", 135], [\"partner\", \"San Francisco Bay Area\", \"2026-01\", 163], [\"agent\", \"Los Angeles\", \"2026-02\", 7], [\"agent\", \"San Diego\", \"2026-02\", 6], [\"agent\", \"San Francisco Bay Area\", \"2026-02\", 2], [\"direct\", \"Los Angeles\", \"2026-02\", 4], [\"direct\", \"San Diego\", \"2026-02\", 3], [\"direct\", \"San Francisco Bay Area\", \"2026-02\", 4], [\"online\", \"Los Angeles\", \"2026-02\", 1], [\"online\", \"San Diego\", \"2026-02\", 1], [\"online\", \"San Francisco Bay Area\", \"2026-02\", 1], [\"partner\", \"Los Angeles\", \"2026-02\", 280], [\"partner\", \"San Diego\", \"2026-02\", 132], [\"partner\", \"San Francisco Bay Area\", \"2026-02\", 131], [\"agent\", \"Los Angeles\", \"2026-03\", 5], [\"agent\", \"San Diego\", \"2026-03\", 5], [\"agent\", \"San Francisco Bay Area\", \"2026-03\", 6], [\"direct\", \"Los Angeles\", \"2026-03\", 5], [\"direct\", \"San Diego\", \"2026-03\", 2], [\"direct\", \"San Francisco Bay Area\", \"2026-03\", 2], [\"online\", \"Los Angeles\", \"2026-03\", 6], [\"online\", \"San Diego\", \"2026-03\", 3], [\"online\", \"San Francisco Bay Area\", \"2026-03\", 2], [\"partner\", \"Los Angeles\", \"2026-03\", 249], [\"partner\", \"San Diego\", \"2026-03\", 140], [\"partner\", \"San Francisco Bay Area\", \"2026-03\", 150], [\"agent\", \"Los Angeles\", \"2026-04\", 5], [\"agent\", \"San Diego\", \"2026-04\", 7], [\"agent\", \"San Francisco Bay Area\", \"2026-04\", 5], [\"direct\", \"Los Angeles\", \"2026-04\", 5], [\"direct\", \"San Diego\", \"2026-04\", 3], [\"direct\", \"San Francisco Bay Area\", \"2026-04\", 2], [\"online\", \"Los Angeles\", \"2026-04\", 2], [\"online\", \"San Francisco Bay Area\", \"2026-04\", 2], [\"partner\", \"Los Angeles\", \"2026-04\", 267], [\"partner\", \"San Diego\", \"2026-04\", 141], [\"partner\", \"San Francisco Bay Area\", \"2026-04\", 142], [\"agent\", \"Los Angeles\", \"2026-05\", 6], [\"agent\", \"San Diego\", \"2026-05\", 6], [\"agent\", \"San Francisco Bay Area\", \"2026-05\", 6], [\"direct\", \"Los Angeles\", \"2026-05\", 5], [\"direct\", \"San Diego\", \"2026-05\", 1], [\"direct\", \"San Francisco Bay Area\", \"2026-05\", 4], [\"online\", \"Los Angeles\", \"2026-05\", 6], [\"online\", \"San Francisco Bay Area\", \"2026-05\", 3], [\"partner\", \"Los Angeles\", \"2026-05\", 246], [\"partner\", \"San Diego\", \"2026-05\", 149], [\"partner\", \"San Francisco Bay Area\", \"2026-05\", 134], [\"agent\", \"Los Angeles\", \"2026-06\", 4], [\"agent\", \"San Diego\", \"2026-06\", 4], [\"agent\", \"San Francisco Bay Area\", \"2026-06\", 6], [\"direct\", \"Los Angeles\", \"2026-06\", 5], [\"direct\", \"San Diego\", \"2026-06\", 1], [\"direct\", \"San Francisco Bay Area\", \"2026-06\", 1], [\"online\", \"Los Angeles\", \"2026-06\", 5], [\"online\", \"San Diego\", \"2026-06\", 1], [\"partner\", \"Los Angeles\", \"2026-06\", 272], [\"partner\", \"San Diego\", \"2026-06\", 122], [\"partner\", \"San Francisco Bay Area\", \"2026-06\", 145], [\"agent\", \"Los Angeles\", \"2026-07\", 10], [\"agent\", \"San Diego\", \"2026-07\", 6], [\"agent\", \"San Francisco Bay Area\", \"2026-07\", 6], [\"direct\", \"Los Angeles\", \"2026-07\", 5], [\"direct\", \"San Diego\", \"2026-07\", 4], [\"direct\", \"San Francisco Bay Area\", \"2026-07\", 5], [\"online\", \"Los Angeles\", \"2026-07\", 2], [\"online\", \"San Diego\", \"2026-07\", 1], [\"online\", \"San Francisco Bay Area\", \"2026-07\", 5], [\"partner\", \"Los Angeles\", \"2026-07\", 279], [\"partner\", \"San Diego\", \"2026-07\", 151], [\"partner\", \"San Francisco Bay Area\", \"2026-07\", 134], [\"agent\", \"Los Angeles\", \"2026-08\", 7], [\"agent\", \"San Diego\", \"2026-08\", 3], [\"agent\", \"San Francisco Bay Area\", \"2026-08\", 4], [\"direct\", \"Los Angeles\", \"2026-08\", 7], [\"direct\", \"San Diego\", \"2026-08\", 6], [\"direct\", \"San Francisco Bay Area\", \"2026-08\", 1], [\"online\", \"Los Angeles\", \"2026-08\", 4], [\"online\", \"San Diego\", \"2026-08\", 1], [\"partner\", \"Los Angeles\", \"2026-08\", 280], [\"partner\", \"San Diego\", \"2026-08\", 126], [\"partner\", \"San Francisco Bay Area\", \"2026-08\", 141], [\"agent\", \"Los Angeles\", \"2026-09\", 6], [\"agent\", \"San Diego\", \"2026-09\", 6], [\"agent\", \"San Francisco Bay Area\", \"2026-09\", 5], [\"direct\", \"Los Angeles\", \"2026-09\", 4], [\"direct\", \"San Diego\", \"2026-09\", 3], [\"direct\", \"San Francisco Bay Area\", \"2026-09\", 3], [\"online\", \"Los Angeles\", \"2026-09\", 6], [\"online\", \"San Diego\", \"2026-09\", 2], [\"online\", \"San Francisco Bay Area\", \"2026-09\", 1], [\"partner\", \"Los Angeles\", \"2026-09\", 284], [\"partner\", \"San Diego\", \"2026-09\", 130], [\"partner\", \"San Francisco Bay Area\", \"2026-09\", 145]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSqAcKEAgSGAI4AUIIdGhpbmtpbmcSDNAjOw94NtQDD15jQxoM44BhddWzoC6EGbQqIjC6sOYSTEuSL/6fS7baqkFd2C54Q8Ew0KzDa4xIbdQg2zI3qq1QkQhanmLs7tNCzqkqxQZA0z5DvvoX1ekXGt6ylp0nMDCaqBE0FpWHJOYH6av6adbBc0fGld9W/Xv/X9H4L6xJOrp+Q3QgQWY/GOl+NvJRExVoUzchXuucsG++iLE0A8RFqxRT2VxT/jJ1frSRYc9dKgmZggjlyKazN5R6Qj7bZKj6k7lqnxCodnxqFqMXjyJcm9uylg6gdWovQ9skEhmui0oDohxxN9njyyT3fVSJ1HFGn709kJ3IR7ZMPt4h8ei358NmMMtD2eJ0jRD9PcwWVtPhJDlx1TcLjXOPp2G7TMXyD+qveZfnk1OSDJtbj3MFbjaw+oaWhj5EABxyvbLrrwy95IVbWTBo3Nls+u0PG7Qc3hIKczBJVbAiquPGIjC5OQNl5zhA3+wPloqu7K2Qgs7/mQURia1m1x7H4D14ksC2iqVNSy9SWvj6EsqyOzAy2BXp3Y3OpVY67zPyVzSmCUPlMGkAy6JOzTWDOgjlncgbR6UJIC+LUVQ1pGUWoNLr6QLCVkMcfSh7gcREBwI2oo3iW29UtqmB+lk9cVheK7VUwyvvdqoYrrcX8nvc+qZtTEaR7LrNJ3AmgMzH84VbaQMbkeDa2JOhmQqMTuMul7WudjzjPm2WDw/cxsl/YeTfS76xgid+ifkzMXHZyGPyoATj3t41ny1aatre/qUrhhx25YQ80o6P2u2jHgT3XjRI+l8LPb1OCLmdAh8cQ0OnYmkrSZHwRq7HFKgBy7dq5UGHeska5LLt8KFjKE9Ynrts6BYaHJx77+htAf1e3sRrNRoS9yTGSLq545Ynt6+/9vCsTKR55iWliS6AdVXDbk47Towb60JT7vlf5LcY6j161ArvRGTrQ8RlpDCNqT7IvNnBpH+I+EVkK4wbQh/3RrfJBg/PZNnv98Pmo+9LvpoTSr+01rLYE75fuzGbqz+gKCV3iFGtpFz2diiBsW+GTLwwMAvHAEhs70bb5gxoWSuuoFUD4WgNbFeq7PAWFQwkCWWTSA6FIHsnqBJgZbgaf4wKu7YZH85636pc1VbrL99fub9L9TW5peCibaJeX+BQYczHG0fF4ed+X6wqzAGuXjD7iVTMydiB8zmI8UeoyvB1yPD3Aluxrz4IWSST3+MzhJDUeSQYAQ==",
+          "thinking": "There's a partner channel launching January 2026, bringing around 540 policies per month. Frequency looks flat, but severity jumped from 11.8k to 15.4k, pushing the loss ratio from 0.40 to 0.53 \u2014 I want to check severity broken down by channel to understand this better, so I'll run a quick query on claims by channel and severity.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Mr7Lzzo1Yp4P2Sta8b8F8k",
+          "input": {
+            "sql": "SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL ORDER BY 1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Mr7Lzzo1Yp4P2Sta8b8F8k",
+          "content": "{\"columns\": [\"h\", \"ch\", \"n\", \"sev\"], \"rows\": [[\"2025H1\", \"other\", 79, 11801.0], [\"2026H1\", \"other\", 82, 17615.0], [\"2026H1\", \"partner\", 40, 11002.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSiAcKEAgSGAI4AUIIdGhpbmtpbmcSDETqwpctBb9DPwkIJRoMRDeEFRBxXqPcCSTxIjBU8qeXs/68eLnCo12qgy1Iys2brlpoWwk+oTuQOvg3cxmHhPcSIIdlpR2iD42MK38qpQZT2bFkhrGGFWo66KeXuHSqcoUfXYOguFlNw2GgrJtUwlvzhVcVGvRlVMAWWHckbr+XfbIOShmzfS+qY2aRyY4kC3utaDVIqsUjVjeQ38PodgZZJpSCm2SCNIUYhcJPGA4RiF3eqdYUUH4qxTTMhirBA5Dq8HAvKk13Fehwri3x0ACIpwlLNNtBOdx6vGYq6HzeKsUUSqtLDaviIuVCgkPH4x1K1Jit737F4tL7agD0OqqLBwJmOWpBEP3kbCWJ3KvyD0WCelsjWsDEfSxJ2LRlGYpodxMcBxkwX0+yX8JqbiwPb5+evvlSwmUYJGkYX+2Q3AkwBS2lupM70cc+sNeQTT1rV7ZHuFrqFyzCFD/bRA4f5iq5pBDJ4k84NxYENckGD0JtjrIt67FeTKBrY5Td0Aa31OWJ1Z0rWOEhNV4HQ3Q1LUj97d7liPCGZEx7z3SGRiQhMrqdMwrbXqVTs5ARdb1igYE330MW31npsq82Ic4zu6JQwKGoBXwHGaV+KfB8AX6Q04Z2LQFsuKrCFd1UMLM70VD+K/utk0TtFN1rWBNew+A39E0lIolzutBhfY279yTT4fgr7rGNcu+an4OGSQOPAyYVq/qnDmnWqzM8gpQGLQLUObfbqlydDgL3ry1n0IOv0AxCAuCm7vlqf6G9zjsasYivgcAqbao4V6wDdDmqmqTu6YaY/bw4bs+JKIqjgnO8r9WWnlz4PMNiz1GIo7jLiOK7qr621+VL6EWzu+gsbaMywI4ZWTwa/fqxHyejAXh+TeqARxTljJMQJTxf0qfNStHXyV+f1w1eaoy1fEb8F39nA/VHuh0R+cKxKhDbLnidCxM4kgmYtTOIX4ECf5N4Vt11qYe0Sey3Z1wuT45fBNdud0XBbShIiZbPDXeAG+5VBUXxG5CpsoMxzm9zpYEizP7978O5locQq/KaUU7HBjss9qR79rHCd8MSufukc9NgxB/M+kmuiRGLo1HpK2cgm11qRwQnxGk10DXMk1ZEGTh6f0AvgisKFxus8z89mS4cYAN0UjIgATj9LCCSPog5AS4M7wo2ccC//IX5k6GEAYGOGAE=",
+          "thinking": "Non-partner claims stayed roughly flat while partner claims added 40, and the severity of other claims jumped from 11.8k to 17.6k, likely driven by a few large wind/hail or water losses in SD rather than a broad trend. That seems sufficient to work with.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01UdMLfsvmDiUfcuxDjpAiCo",
+          "input": {
+            "sql": "SELECT h, ch, n, sev FROM (SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL) ORDER BY 1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01UdMLfsvmDiUfcuxDjpAiCo",
+          "content": "{\"columns\": [\"h\", \"ch\", \"n\", \"sev\"], \"rows\": [[\"2025H1\", \"other\", 79, 11801.0], [\"2026H1\", \"other\", 82, 17615.0], [\"2026H1\", \"partner\", 40, 11002.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01HqYDZ32nCqL7WM8L3e1enh",
+          "input": {
+            "sql": "WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01HqYDZ32nCqL7WM8L3e1enh",
+          "content": "{\"columns\": [\"h\", \"n\", \"policy_months\", \"freq_per_1000_pm\", \"severity\", \"loss_ratio\"], \"rows\": [[\"2025H1\", 79, 17928.0, 4.41, 11801.0, 0.401], [\"2026H1\", 122, 27538.0, 4.43, 15447.0, 0.53]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"California home claims counted by loss date, Jan\u2013Jun 2026 versus Jan\u2013Jun 2025, using claim count, claim frequency (claims per 1,000 policy-months), severity (incurred per claim, paid plus reserve) and loss ratio. The latest months aren't in the comparison, so late reporting doesn't affect it.\",\"answer\":\"The increase is real: 122 claims in H1 2026 against 79 in H1 2025, up 54%. It comes from a bigger book, not riskier policies. Home policy-months in California rose from about 17,900 to 27,500 (+54%). The cause is a large batch of partner-channel policies that started in January 2026, about 530 a month in total across LA, San Diego and the Bay Area. Claim frequency was flat at 4.41 against 4.43 per 1,000 policy-months. Partner policies produced 40 of the 122 claims. Claims from all other channels were 82, almost the same as the 79 a year earlier. There was no California weather event in the weather table. Cost per claim also rose, from about $11.8k to $15.4k, and the loss ratio went from 0.40 to 0.53. That rise is not from the partner book. Partner claims average about $11.0k, while the non-partner claims average about $17.6k, up from $11.8k. The non-partner rise is concentrated in a few large water_damage and wind_hail claims in LA and San Diego, and it is a small sample, so I can't say whether it is more than noise.\",\"answer_sql\":\"WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h\",\"findings\":[{\"claim\":\"Claim count rose 54% while exposure rose by about the same amount, so frequency was flat. Severity and loss ratio increased.\",\"evidence_sql\":\"WITH e AS (SELECT CASE WHEN month>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, sum(policies_in_force) pm, sum(earned_premium) ep FROM exposure_monthly WHERE region='California' AND product='home' AND (month BETWEEN '2025-01-01' AND '2025-06-01' OR month BETWEEN '2026-01-01' AND '2026-06-01') GROUP BY 1), c AS (SELECT CASE WHEN loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, count(*) n, sum(coalesce(pay.paid,0)+reserve_amount) inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE region='California' AND product='home' AND (loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY 1) SELECT h, n, round(pm) policy_months, round(1000*n/pm,2) freq_per_1000_pm, round(inc/n) severity, round(inc/ep,3) loss_ratio FROM c JOIN e USING(h) ORDER BY h\",\"key_numbers\":[{\"label\":\"H1 2025 claims\",\"value\":79,\"unit\":\"claims\"},{\"label\":\"H1 2026 claims\",\"value\":122,\"unit\":\"claims\"},{\"label\":\"H1 2025 frequency\",\"value\":4.41,\"unit\":\"per 1,000 policy-months\"},{\"label\":\"H1 2026 frequency\",\"value\":4.43,\"unit\":\"per 1,000 policy-months\"},{\"label\":\"H1 2025 loss ratio\",\"value\":0.401,\"unit\":\"ratio\"},{\"label\":\"H1 2026 loss ratio\",\"value\":0.53,\"unit\":\"ratio\"}],\"confidence\":\"high\"},{\"claim\":\"Partner-channel policies began in January 2026, about 530 new a month. Claims from other channels were flat, and partner claims have lower severity.\",\"evidence_sql\":\"SELECT h, ch, n, sev FROM (SELECT CASE WHEN c.loss_date>='2026-01-01' THEN '2026H1' ELSE '2025H1' END h, CASE WHEN p.channel='partner' THEN 'partner' ELSE 'other' END ch, count(*) n, round(avg(coalesce(pay.paid,0)+c.reserve_amount)) sev FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.region='California' AND c.product='home' AND (c.loss_date BETWEEN '2025-01-01' AND '2025-06-30' OR c.loss_date BETWEEN '2026-01-01' AND '2026-06-30') GROUP BY ALL) ORDER BY 1,2\",\"key_numbers\":[{\"label\":\"Non-partner claims H1 2025\",\"value\":79,\"unit\":\"claims\"},{\"label\":\"Non-partner claims H1 2026\",\"value\":82,\"unit\":\"claims\"},{\"label\":\"Partner claims H1 2026\",\"value\":40,\"unit\":\"claims\"},{\"label\":\"Non-partner severity H1 2025\",\"value\":11801,\"unit\":\"USD\"},{\"label\":\"Non-partner severity H1 2026\",\"value\":17615,\"unit\":\"USD\"},{\"label\":\"Partner severity H1 2026\",\"value\":11002,\"unit\":\"USD\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"Mix of business change: a new partner-channel book\",\"verdict\":\"supported\",\"evidence\":\"Partner policies went from none to about 530 new a month from January 2026. Exposure and claims grew about 54%, and frequency didn't change.\"},{\"hypothesis\":\"Higher underlying claim frequency\",\"verdict\":\"ruled_out\",\"evidence\":\"Frequency was 4.41 against 4.43 per 1,000 policy-months.\"},{\"hypothesis\":\"External weather event\",\"verdict\":\"ruled_out\",\"evidence\":\"The weather_events table has no California events.\"},{\"hypothesis\":\"Data problem such as duplicated rows or an incomplete period\",\"verdict\":\"ruled_out\",\"evidence\":\"There are no duplicate claim rows, and the compared periods (Jan\u2013Jun) are old enough to be complete.\"},{\"hypothesis\":\"Higher severity on existing business\",\"verdict\":\"inconclusive\",\"evidence\":\"Non-partner severity rose from $11.8k to $17.6k, driven by a few large water_damage and wind_hail claims. The sample is small, so noise can't be ruled out.\"}],\"data_quality_issues\":[{\"issue\":\"There are 15 extreme reserve_amount outliers across the warehouse, up to $178k.\",\"impact\":\"A few large reserves can move severity and loss ratio in a small segment like California home.\"}],\"charts\":[{\"title\":\"California home claims by loss month\",\"sql\":\"SELECT strftime(date_trunc('month', loss_date),'%Y-%m') AS month, count(*) AS claims FROM claims WHERE region='California' AND product='home' GROUP BY 1 ORDER BY 1\",\"type\":\"line\",\"x\":\"month\",\"y\":\"claims\"}],\"proposed_actions\":[],\"open_questions\":[\"Should the partner book's loss ratio be tracked as its own segment as it matures?\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

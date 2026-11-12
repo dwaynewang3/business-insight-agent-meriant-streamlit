@@ -1,0 +1,398 @@
+{
+  "case_id": "what-paid-amount-by-month-2026-q1",
+  "question": "How much did we pay out on claims each month in Q1 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Total claim payments by payment date (the agreed paid_amount metric) for each month of Q1 2026 (Jan\u2013Mar). I removed 159 duplicate payment rows from the March reload batch, so March isn't double counted.",
+    "answer": "Paid out in Q1 2026: January $2,135,808, February $2,292,563, March $2,748,917. That is about $7.18M for the quarter. A raw sum would show March as $3,641,916, which is about $893K too high. The cause is a reload on 2026-03-14 that re-delivered 159 payments dated 2026-03-02 to 03-13.",
+    "answer_sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_amount FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "March raw payments are inflated by duplicate rows from the reload-2026-03-14 batch. After deduplication, payments rise steadily from January to March.",
+        "evidence_sql": "SELECT load_batch, count(*) AS rows, min(payment_date), max(payment_date) FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1",
+        "key_numbers": [
+          {
+            "label": "Jan paid",
+            "value": 2135807.76,
+            "unit": "USD"
+          },
+          {
+            "label": "Feb paid",
+            "value": 2292562.66,
+            "unit": "USD"
+          },
+          {
+            "label": "Mar paid (deduped)",
+            "value": 2748917.14,
+            "unit": "USD"
+          },
+          {
+            "label": "Mar paid (raw)",
+            "value": 3641915.89,
+            "unit": "USD"
+          },
+          {
+            "label": "Duplicate rows",
+            "value": 159,
+            "unit": "rows"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "159 payment rows were loaded twice, in batch reload-2026-03-14, covering payments from 2026-03-02 to 03-13.",
+        "impact": "The raw March total is overstated by about $893K. The standard paid_amount metric would include these rows unless they are excluded."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payments from reload-2026-03-14",
+        "reason": "159 rows duplicate existing payments and overstate March 2026 paid amounts."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.034252,
+  "seconds": 16.61,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "paid_amount"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_deduped, round(sum(amount) FILTER (WHERE true),2) AS x, (SELECT round(sum(amount),2) FROM claim_payments c WHERE date_trunc('month',c.payment_date)=date_trunc('month',d.payment_date)) AS paid_raw, count(*) FILTER (WHERE rn>1) AS dup_rows FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "error": "Error executing tool run_sql: QueryFailed: Binder Error: column \"payment_date\" must appear in the GROUP BY clause or must be part of an aggregate function.\nEither add it to the GROUP BY list, or use \"ANY_VALUE(payment_date)\" if the exact value of \"payment_date\" is not important.\n\nLINE 1: ... c WHERE date_trunc('month',c.payment_date)=date_trunc('month',d.payment_date)) AS paid_raw, count(*) FILTER (WHERE rn...\n                                                                          ^"
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount) FILTER (WHERE rn=1),2) AS paid_deduped, round(sum(amount),2) AS paid_raw, count(*) FILTER (WHERE rn>1) AS dup_rows FROM d GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount) FILTER (WHERE rn=1),2) AS paid_deduped, round(sum(amount),2) AS paid_raw, count(*) FILTER (WHERE rn>1) AS dup_rows FROM d GROUP BY 1 ORDER BY 1",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_amount FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_amount FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1",
+      "rows": 3,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-4ad456f49a37",
+      "run_id": "r-bfd0ab6d9771",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 103,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 167,
+      "cost_usd": 0.003034,
+      "seconds": 1.58,
+      "request_id": "req_011Cg26Fhcb29H4TF5E2YKJH"
+    },
+    {
+      "session_id": "s-4ad456f49a37",
+      "run_id": "r-bfd0ab6d9771",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 401,
+      "cache_read_input_tokens": 8062,
+      "cache_creation_input_tokens": 870,
+      "cost_usd": 0.007801,
+      "seconds": 3.22,
+      "request_id": "req_011Cg26FpNdqab7QBV6Q313W"
+    },
+    {
+      "session_id": "s-4ad456f49a37",
+      "run_id": "r-bfd0ab6d9771",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 284,
+      "cache_read_input_tokens": 8932,
+      "cache_creation_input_tokens": 595,
+      "cost_usd": 0.006118,
+      "seconds": 2.7,
+      "request_id": "req_011Cg26G5ppPyQgqLp7Am5ez"
+    },
+    {
+      "session_id": "s-4ad456f49a37",
+      "run_id": "r-bfd0ab6d9771",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 234,
+      "cache_read_input_tokens": 9527,
+      "cache_creation_input_tokens": 411,
+      "cost_usd": 0.005277,
+      "seconds": 2.11,
+      "request_id": "req_011Cg26GFy1AYfCuLuHvcNFA"
+    },
+    {
+      "session_id": "s-4ad456f49a37",
+      "run_id": "r-bfd0ab6d9771",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 924,
+      "cache_read_input_tokens": 9938,
+      "cache_creation_input_tokens": 316,
+      "cost_usd": 0.012022,
+      "seconds": 6.65,
+      "request_id": "req_011Cg26GQwWhUjeSEaqMnbyk"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate payments from reload-2026-03-14",
+      "reason": "159 rows duplicate existing payments and overstate March 2026 paid amounts."
+    }
+  ],
+  "session_id": "s-4ad456f49a37",
+  "run_id": "r-bfd0ab6d9771",
+  "numbers": {
+    "checked": 5,
+    "confirmed": 1,
+    "unconfirmed": [
+      {
+        "finding": 0,
+        "label": "Jan paid",
+        "value": 2135807.76,
+        "unit": "USD",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "Feb paid",
+        "value": 2292562.66,
+        "unit": "USD",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "Mar paid (deduped)",
+        "value": 2748917.14,
+        "unit": "USD",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "Mar paid (raw)",
+        "value": 3641915.89,
+        "unit": "USD",
+        "reason": "Not in the result of its finding's SQL."
+      }
+    ]
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "How much did we pay out on claims each month in Q1 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_017TJ5EAg13HNi1TZWKihWkS",
+          "input": {
+            "name": "paid_amount"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Gii57ZzpYFhFMYUoNa8wkh",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017TJ5EAg13HNi1TZWKihWkS",
+          "content": "{\"name\": \"paid_amount\", \"label\": \"Paid amount\", \"description\": \"Sum of claim payments, counted by payment date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"product\", \"cause\", \"payee_type\", \"load_batch\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(amount) over payment_facts\", \"time_column\": \"payment_date\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Gii57ZzpYFhFMYUoNa8wkh",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS1wUKEAgSGAI4AUIIdGhpbmtpbmcSDB5ewyWoj40XlCfINxoMfAPQim+BvIM+J7WsIjCuDcTLRxd90iajFHiB09eUQPDK2d9wwgxqD4TTkAtiba38GY/ik38qE8jJSZengMsq9ARQ6CAkNgnuHA3sZS3zWTls1Ywehe/o26EdAUiGYYWEnQIumswctgDcFm1jgs9cNjzQhvu3EbD5OPWp/hSPTa3QQ5EVkTaZejO0H+7VNnkaWz6LuxFH43NUUpOZ8oEp2ylCj7ina4TPhM3jaeLKu0PvEa84wfm6x4kaJI3PgsreLWB1lSk2nXIiPGGjcyL79oC2WIDRS43AwYHpKDCCYlORS0LZlI//H8CBAVX7fnH9qmbL/3mXehdXB7Rp/QpTE73q6EFpIt4hLpUigIvfqTDAtLMSUTYxiDKISAQZXSY1Jay6FjEsyrep3E92DugBUbAKyw1IP6NqzR5Rly0i3y8MOqry3fnw4h0gILNI6qsdmmpsWhqsV4su68KQA1D0WRZc3XdK3GKTkxt1nSBn4ThsQm4PcKa8ps/Ir8x8SYD2n5T/GMmQnOtnFgZOxlnkukIQojV0CwWQL0WY84K9h0NYXdOpkkiEv3nXlo9HpiXPquroNokNDMkrjtUiL75rveftzVLUmKaTYJseCCGjg45J3cX0rInkVJC/vpjPYB0kP8H7TNXqoZI6t7pD9isYzwSQ5yR6QfWATHY8ce1tuvUd9wDUeUFHmNE8Z8xsXcPFDsDL75H4ZfagVE0HTnE3izRJO/MiNOUTBc4gE6by2UsTu/oS246DIV01lVQ70a0irJgCnq8g3YsuAUWaW6JigN4yHQNM62X1ogVeyophEVAYobSJ9T0BmUPpQfGHk2nQ5bbmfDZYKIkFcF3CLGLR2h/vbx+pqN8tZ9N98Yysq8s5BM270NmvoAwU/Sfpjpg9uy/mZwpW9PgZHWN4uDtos1KAHc+fGAE=",
+          "thinking": "I'm noticing the March duplicates look like they're from a reload batch, so I should confirm those 159 duplicate rows actually match the reload and exclude them accordingly.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01DuA2VFQF351YumkrwMZyPC",
+          "input": {
+            "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_deduped, round(sum(amount) FILTER (WHERE true),2) AS x, (SELECT round(sum(amount),2) FROM claim_payments c WHERE date_trunc('month',c.payment_date)=date_trunc('month',d.payment_date)) AS paid_raw, count(*) FILTER (WHERE rn>1) AS dup_rows FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DuA2VFQF351YumkrwMZyPC",
+          "content": "Error executing tool run_sql: QueryFailed: Binder Error: column \"payment_date\" must appear in the GROUP BY clause or must be part of an aggregate function.\nEither add it to the GROUP BY list, or use \"ANY_VALUE(payment_date)\" if the exact value of \"payment_date\" is not important.\n\nLINE 1: ... c WHERE date_trunc('month',c.payment_date)=date_trunc('month',d.payment_date)) AS paid_raw, count(*) FILTER (WHERE rn...\n                                                                          ^",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01QqLznfVs1n9hjqsXn3e4HY",
+          "input": {
+            "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount) FILTER (WHERE rn=1),2) AS paid_deduped, round(sum(amount),2) AS paid_raw, count(*) FILTER (WHERE rn>1) AS dup_rows FROM d GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01QqLznfVs1n9hjqsXn3e4HY",
+          "content": "{\"columns\": [\"month\", \"paid_deduped\", \"paid_raw\", \"dup_rows\"], \"rows\": [[\"2026-01-01\", 2135807.76, 2135807.76, 0], [\"2026-02-01\", 2292562.66, 2292562.66, 0], [\"2026-03-01\", 2748917.14, 3641915.89, 159]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Vdf7GFUxBtFSvCdQPFngkk",
+          "input": {
+            "sql": "WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_amount FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Vdf7GFUxBtFSvCdQPFngkk",
+          "content": "{\"columns\": [\"month\", \"paid_amount\"], \"rows\": [[\"2026-01-01\", 2135807.76], [\"2026-02-01\", 2292562.66], [\"2026-03-01\", 2748917.14]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Total claim payments by payment date (the agreed paid_amount metric) for each month of Q1 2026 (Jan\u2013Mar). I removed 159 duplicate payment rows from the March reload batch, so March isn't double counted.\",\"answer\":\"Paid out in Q1 2026: January $2,135,808, February $2,292,563, March $2,748,917. That is about $7.18M for the quarter. A raw sum would show March as $3,641,916, which is about $893K too high. The cause is a reload on 2026-03-14 that re-delivered 159 payments dated 2026-03-02 to 03-13.\",\"answer_sql\":\"WITH d AS (SELECT *, row_number() OVER (PARTITION BY claim_id, payment_date, amount, payee_type ORDER BY (load_batch LIKE 'reload%'), payment_id) rn FROM claim_payments WHERE payment_date BETWEEN '2026-01-01' AND '2026-03-31') SELECT date_trunc('month', payment_date)::DATE AS month, round(sum(amount),2) AS paid_amount FROM d WHERE rn=1 GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"March raw payments are inflated by duplicate rows from the reload-2026-03-14 batch. After deduplication, payments rise steadily from January to March.\",\"evidence_sql\":\"SELECT load_batch, count(*) AS rows, min(payment_date), max(payment_date) FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1\",\"key_numbers\":[{\"label\":\"Jan paid\",\"value\":2135807.76,\"unit\":\"USD\"},{\"label\":\"Feb paid\",\"value\":2292562.66,\"unit\":\"USD\"},{\"label\":\"Mar paid (deduped)\",\"value\":2748917.14,\"unit\":\"USD\"},{\"label\":\"Mar paid (raw)\",\"value\":3641915.89,\"unit\":\"USD\"},{\"label\":\"Duplicate rows\",\"value\":159,\"unit\":\"rows\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"159 payment rows were loaded twice, in batch reload-2026-03-14, covering payments from 2026-03-02 to 03-13.\",\"impact\":\"The raw March total is overstated by about $893K. The standard paid_amount metric would include these rows unless they are excluded.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payments from reload-2026-03-14\",\"reason\":\"159 rows duplicate existing payments and overstate March 2026 paid amounts.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

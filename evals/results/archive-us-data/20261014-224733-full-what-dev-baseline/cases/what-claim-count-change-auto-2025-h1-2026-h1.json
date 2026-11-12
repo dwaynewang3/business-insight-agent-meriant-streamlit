@@ -1,0 +1,368 @@
+{
+  "case_id": "what-claim-count-change-auto-2025-h1-2026-h1",
+  "question": "By what percentage did the number of auto claims change from the first half of 2025 to the first half of 2026?",
+  "role": "actuarial_analyst",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Auto claim count (agreed claim_count metric, counted by loss date), product = auto. This compares H1 2025 (Jan 1 to Jun 30, 2025) with H1 2026 (Jan 1 to Jun 30, 2026) as a percentage change. Both periods are about 3 months old or more, so late reporting has little effect.",
+    "answer": "Auto claims fell 10.25%, from 1,434 in H1 2025 to 1,287 in H1 2026. That is 147 fewer claims. This is the raw count. I did not adjust for changes in the number of policies in force.",
+    "answer_sql": "SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'",
+    "findings": [
+      {
+        "claim": "Auto claim count dropped 10.25% from H1 2025 to H1 2026.",
+        "evidence_sql": "SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'",
+        "key_numbers": [
+          {
+            "label": "H1 2025 auto claims",
+            "value": 1434,
+            "unit": "claims"
+          },
+          {
+            "label": "H1 2026 auto claims",
+            "value": 1287,
+            "unit": "claims"
+          },
+          {
+            "label": "Change",
+            "value": -10.25,
+            "unit": "percent"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": [
+      "Do you want the change in claim frequency per 1,000 policies in force? That would account for any change in the number of policies."
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.033034,
+  "seconds": 14.0,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "claim_count"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_count",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "auto"
+            ]
+          }
+        ],
+        "grain": "year",
+        "start": "2025-01-01",
+        "end": "2025-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('year', loss_date) AS DATE) AS period, count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-01-01'\n  AND loss_date <= DATE '2025-06-30'\n  AND product IN ('auto')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "claim_count",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "auto"
+            ]
+          }
+        ],
+        "grain": "year",
+        "start": "2026-01-01",
+        "end": "2026-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('year', loss_date) AS DATE) AS period, count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2026-01-01'\n  AND loss_date <= DATE '2026-06-30'\n  AND product IN ('auto')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'"
+      },
+      "source": "custom_query",
+      "sql": "SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-c515deca319c",
+      "run_id": "r-b2a8e5ffa1f3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 99,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 182,
+      "cost_usd": 0.003032,
+      "seconds": 1.47,
+      "request_id": "req_011Cg26eQTcBp1SmsJrzvwzV"
+    },
+    {
+      "session_id": "s-c515deca319c",
+      "run_id": "r-b2a8e5ffa1f3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 381,
+      "cache_read_input_tokens": 8077,
+      "cache_creation_input_tokens": 903,
+      "cost_usd": 0.007687,
+      "seconds": 2.78,
+      "request_id": "req_011Cg26eWs53EFa5GnX9NGqS"
+    },
+    {
+      "session_id": "s-c515deca319c",
+      "run_id": "r-b2a8e5ffa1f3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 432,
+      "cache_read_input_tokens": 8980,
+      "cache_creation_input_tokens": 1273,
+      "cost_usd": 0.009303,
+      "seconds": 3.31,
+      "request_id": "req_011Cg26eis966PLnmuDgtWEa"
+    },
+    {
+      "session_id": "s-c515deca319c",
+      "run_id": "r-b2a8e5ffa1f3",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 973,
+      "cache_read_input_tokens": 10253,
+      "cache_creation_input_tokens": 491,
+      "cost_usd": 0.013012,
+      "seconds": 6.02,
+      "request_id": "req_011Cg26ey98EjJwDVTwp7MD8"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-c515deca319c",
+  "run_id": "r-b2a8e5ffa1f3",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Actuarial analyst. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "By what percentage did the number of auto claims change from the first half of 2025 to the first half of 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01NAN1GSZFFPHP4if9erwVbP",
+          "input": {
+            "name": "claim_count"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01WnJsUzATi9v2YjmvMyar6N",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01NAN1GSZFFPHP4if9erwVbP",
+          "content": "{\"name\": \"claim_count\", \"label\": \"Claim count\", \"description\": \"Number of claims, counted by loss date.\", \"unit\": \"claims\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"count(*) over claim_facts\", \"time_column\": \"loss_date\", \"notes\": \"Claims are often reported days or weeks after the loss, so the most recent weeks keep filling in as late reports arrive.\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01WnJsUzATi9v2YjmvMyar6N",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_014Gq1yvLZrVdYV2nrPmhCKk",
+          "input": {
+            "metric": "claim_count",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "auto"
+                ]
+              }
+            ],
+            "grain": "year",
+            "start": "2025-01-01",
+            "end": "2025-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_018BPD5UAzAa5sEfUMJ9ZNY3",
+          "input": {
+            "metric": "claim_count",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "auto"
+                ]
+              }
+            ],
+            "grain": "year",
+            "start": "2026-01-01",
+            "end": "2026-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_014Gq1yvLZrVdYV2nrPmhCKk",
+          "content": "{\"metric\": \"claim_count\", \"label\": \"Claim count\", \"unit\": \"claims\", \"definition\": \"count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('year', loss_date) AS DATE) AS period, count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-01-01'\\n  AND loss_date <= DATE '2025-06-30'\\n  AND product IN ('auto')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-01-01\", 1434]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_018BPD5UAzAa5sEfUMJ9ZNY3",
+          "content": "{\"metric\": \"claim_count\", \"label\": \"Claim count\", \"unit\": \"claims\", \"definition\": \"count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('year', loss_date) AS DATE) AS period, count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2026-01-01'\\n  AND loss_date <= DATE '2026-06-30'\\n  AND product IN ('auto')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2026-01-01\", 1287]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS2QYKEAgSGAI4AUIIdGhpbmtpbmcSDNzpHm0mzsti3/z7shoMYXbtyxqwPgBWZe6rIjAKhgQBaYME3A5UfWTZrnPYmZuHLZ3gP75mOsLNc06Pbp8fzdpVhu1x0ZlUYfvOOJMq9gUelTrT1I6IRWzPxXJNXwHNdpX7rDZ24m32MSNQlPa1b2RuPnLYabGih66iDXgMu7nq1zQ05JNTWJzy6Sana6DEQdAjyRnidsIX9xWIiqM1MQacxbZN5a1TPKlQAP5Sd8a9UAt65WMEqS3aNjrWsduAY6K18gctt+nKz4vWsTFPjH+yu2hChpq+RSNJ3fEK0UlApSLTxSUmDYXSDQyU4IA1ib6dMUdFxQbCAww7zT7hPJ1Qxfs3O2CX2m3468l8hp2YbPcSAPf1Ww+3NDOAOzAwwsnHLeqTfvee28PByM2JaVWKDE/lgHkclRJbbEmy1Kd1+/5XdhBQIyCOvoiCa1+IaY2lB3UOOZexbrNC4cyzVJf7XPGued3ABX2XQOexY1ayvVMpxou4BlgDeb4CPG1lB8fDxsVDcVV1mVERomhWnPiWtz7HWJicMGhcqyqxLNhh6UoSqwvlkQnkvQ7/1lFDa8b2AqStiGyyWFCSQfaodXNrAtXG0ikNKkNI5KJ5s3et26pFcvRvB8FjGB5AwXdWp59zwSOxa+TgVzA8x9dPOQaF9d6FIbtWKw/3HadxnJqbNpYwcPBj5nDoFXtEfMEg7c3lO8Hx1roJ2WZeuEP7czo8/cZG8l7UYWAsOu/wNtm7YBla7zW1hsA5R6dqqhvVfqMxG3Vh2ZqiDUFH8+69gScLdyXokirkBMP76Y+uUJk4Gr+D/nDfH7UF/TwUnNYBhqKiQKFKpV4Gli0rpfEigJCl1rBb4yl8aC72y/4az7xyzVBs3B2rxCBSeeTVorA7k28B/Et+U6O8HixRoOFtdN66D/upZways3haTHJxpPCyNpClOi7X53Gwd8T8hl7oJLuvSulBD1orDk58ocuQpx9lvitji9+Sho013vvw5BveKQvXEq0r+LevSbliCHG8+yo6+Y32fa3bkKDEJhMVf3U6eegWZqG8hvGzRpC4QFwZdOA8T0qASvdc6QwFR2XjMTEEeAkXvm1+ddc93wKpBzaiZkuUoRgB",
+          "thinking": "Calculating the change: (1287-1434)/1434 comes out to about -10.3%. I should note that exposure may have shifted too, but keep it brief since H1 2026 is already complete and reported by September 30.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01VB5LGXeWLLDpohLb2JBdrQ",
+          "input": {
+            "sql": "SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VB5LGXeWLLDpohLb2JBdrQ",
+          "content": "{\"columns\": [\"pct_change\", \"h1_2025\", \"h1_2026\"], \"rows\": [[-10.25, 1434, 1287]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Auto claim count (agreed claim_count metric, counted by loss date), product = auto. This compares H1 2025 (Jan 1 to Jun 30, 2025) with H1 2026 (Jan 1 to Jun 30, 2026) as a percentage change. Both periods are about 3 months old or more, so late reporting has little effect.\",\"answer\":\"Auto claims fell 10.25%, from 1,434 in H1 2025 to 1,287 in H1 2026. That is 147 fewer claims. This is the raw count. I did not adjust for changes in the number of policies in force.\",\"answer_sql\":\"SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'\",\"findings\":[{\"claim\":\"Auto claim count dropped 10.25% from H1 2025 to H1 2026.\",\"evidence_sql\":\"SELECT round(100.0*(count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') - count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'))/count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30'),2) AS pct_change, count(*) FILTER (WHERE loss_date BETWEEN '2025-01-01' AND '2025-06-30') AS h1_2025, count(*) FILTER (WHERE loss_date BETWEEN '2026-01-01' AND '2026-06-30') AS h1_2026 FROM claims WHERE product='auto'\",\"key_numbers\":[{\"label\":\"H1 2025 auto claims\",\"value\":1434,\"unit\":\"claims\"},{\"label\":\"H1 2026 auto claims\",\"value\":1287,\"unit\":\"claims\"},{\"label\":\"Change\",\"value\":-10.25,\"unit\":\"percent\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[\"Do you want the change in claim frequency per 1,000 policies in force? That would account for any change in the number of policies.\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

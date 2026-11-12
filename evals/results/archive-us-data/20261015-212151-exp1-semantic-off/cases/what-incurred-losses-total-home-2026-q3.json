@@ -1,0 +1,294 @@
+{
+  "case_id": "what-incurred-losses-total-home-2026-q3",
+  "repeat": 1,
+  "question": "What were the total incurred losses on home claims in Q3 2026?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Total incurred losses (paid plus reserve) on home claims with a loss date from 2026-07-01 to 2026-09-30. I counted claims by loss date. Paid is the sum of all payments on those claims in claim_payments. Reserve is the current reserve_amount.",
+    "answer": "Home incurred losses for Q3 2026 were about $9.47M across 608 claims. That is $5.12M paid plus $4.36M in open reserves. Q3 is not complete: late September losses are still being reported (about 79% of September claims were in by the extract date). Incurred will probably rise as those claims arrive and as reserves develop.",
+    "answer_sql": "WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT sum(coalesce(p.paid,0)+c.reserve_amount) AS incurred_losses, sum(coalesce(p.paid,0)) AS paid, sum(c.reserve_amount) AS reserve, count(*) AS claims FROM c LEFT JOIN p USING(claim_id)",
+    "findings": [
+      {
+        "claim": "Home incurred for Q3 2026 loss dates is about $9.47M, made up of $5.12M paid and $4.36M reserve, over 608 claims.",
+        "evidence_sql": "WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT count(*) claims, sum(c.reserve_amount) reserve, sum(coalesce(p.paid,0)) paid, sum(coalesce(p.paid,0)+c.reserve_amount) incurred FROM c LEFT JOIN p USING(claim_id)",
+        "key_numbers": [
+          {
+            "label": "Incurred",
+            "value": 9474779.72,
+            "unit": "USD"
+          },
+          {
+            "label": "Paid",
+            "value": 5115872.5,
+            "unit": "USD"
+          },
+          {
+            "label": "Reserve",
+            "value": 4358907.22,
+            "unit": "USD"
+          },
+          {
+            "label": "Claims",
+            "value": 608,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "Recent claims are still being reported. About 79% of September 2026 claims were in by the extract date.",
+        "impact": "Q3 incurred is understated, and September is the most affected month."
+      },
+      {
+        "issue": "The reload-2026-03-14 batch has 159 duplicate payment rows, for payments dated March 2026.",
+        "impact": "None on this answer. I checked, and excluding that batch gives the same paid total for Q3 claims."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payment rows from reload-2026-03-14",
+        "reason": "159 payment rows repeat existing payments and would inflate paid and incurred figures for March 2026 claims."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.028968,
+  "seconds": 14.45,
+  "tool_calls": [
+    {
+      "tool": "describe_table",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), pa AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT count(*) claims, sum(c.reserve_amount) reserve, sum(coalesce(p.paid,0)) paid_excl_reload, sum(coalesce(pa.paid,0)) paid_all, sum(coalesce(p.paid,0)+c.reserve_amount) incurred FROM c LEFT JOIN p USING(claim_id) LEFT JOIN pa USING(claim_id)"
+      },
+      "source": "custom_query",
+      "sql": "WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), pa AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT count(*) claims, sum(c.reserve_amount) reserve, sum(coalesce(p.paid,0)) paid_excl_reload, sum(coalesce(pa.paid,0)) paid_all, sum(coalesce(p.paid,0)+c.reserve_amount) incurred FROM c LEFT JOIN p USING(claim_id) LEFT JOIN pa USING(claim_id)",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-81cf2bf1940d",
+      "run_id": "r-def804ef5524",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 151,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 168,
+      "cost_usd": 0.003324,
+      "seconds": 2.67,
+      "request_id": "req_011Cg3sntbykFBqDwK5eMPiu"
+    },
+    {
+      "session_id": "s-81cf2bf1940d",
+      "run_id": "r-def804ef5524",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 468,
+      "cache_read_input_tokens": 7100,
+      "cache_creation_input_tokens": 2030,
+      "cost_usd": 0.011179,
+      "seconds": 4.02,
+      "request_id": "req_011Cg3so6WbZwZE9EQ2xkFfR"
+    },
+    {
+      "session_id": "s-81cf2bf1940d",
+      "run_id": "r-def804ef5524",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1125,
+      "cache_read_input_tokens": 9130,
+      "cache_creation_input_tokens": 554,
+      "cost_usd": 0.014465,
+      "seconds": 7.33,
+      "request_id": "req_011Cg3soPvrU4GTb1wqdnuep"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate payment rows from reload-2026-03-14",
+      "reason": "159 payment rows repeat existing payments and would inflate paid and incurred figures for March 2026 claims."
+    }
+  ],
+  "session_id": "s-81cf2bf1940d",
+  "run_id": "r-def804ef5524",
+  "numbers": {
+    "checked": 4,
+    "confirmed": 4,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What were the total incurred losses on home claims in Q3 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01MiF1DxnHfsBqGzzY8W9A9Q",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "describe_table",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01RHq4fYKuzbkYRMkgC9kZUA",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Qh2c35aXTiQw9xj79SGz17",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01MiF1DxnHfsBqGzzY8W9A9Q",
+          "content": "{\"table\": \"claim_payments\", \"description\": \"Payments made on claims. One row per payment row loaded into the warehouse.\", \"rows\": 9349, \"columns\": [{\"name\": \"payment_id\", \"type\": \"VARCHAR\", \"description\": \"Unique ID of the payment row, assigned when the row is loaded.\", \"empty\": 0, \"distinct\": 9349, \"examples\": [\"PAY-0000001\", \"PAY-0000002\", \"PAY-0000003\", \"PAY-0000004\", \"PAY-0000005\"]}, {\"name\": \"claim_id\", \"type\": \"VARCHAR\", \"description\": \"Claim the payment belongs to (claims.claim_id).\", \"empty\": 0, \"distinct\": 6131, \"examples\": [\"CLM-004154\", \"CLM-004208\", \"CLM-004227\", \"CLM-004105\", \"CLM-004214\"]}, {\"name\": \"payment_date\", \"type\": \"DATE\", \"description\": \"Date the payment was issued.\", \"empty\": 0, \"min\": \"2025-01-05\", \"max\": \"2026-09-30\"}, {\"name\": \"amount\", \"type\": \"DECIMAL(12,2)\", \"description\": \"Payment amount in USD.\", \"empty\": 0, \"min\": 0.56, \"max\": 237118.89}, {\"name\": \"payee_type\", \"type\": \"VARCHAR\", \"description\": \"Who received the payment.\", \"empty\": 0, \"values\": [\"repair_shop\", \"policyholder\", \"contractor\", \"claimant\"]}, {\"name\": \"load_batch\", \"type\": \"VARCHAR\", \"description\": \"Name of the warehouse load that delivered the row. Payments normally arrive in the nightly batch after the payment date, named nightly-YYYY-MM-DD.\", \"empty\": 0, \"distinct\": 635, \"examples\": [\"reload-2026-03-14\", \"nightly-2026-08-03\", \"nightly-2026-08-05\", \"nightly-2026-09-06\", \"nightly-2026-07-04\"]}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01RHq4fYKuzbkYRMkgC9kZUA",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Qh2c35aXTiQw9xj79SGz17",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSlQcKEAgSGAI4AUIIdGhpbmtpbmcSDLm5G2aVesnv2pyVlBoM66s+gytRZBZFWcucIjALmpQEcEGrlRXD2OMlpYmyM0wPU6mD4Oo/iy/nHhz+uUDkmj0m/v85cPAeWU8eweMqsgbS4sB2nnnZ+8FkBXMqLxg3M9S42jYPvVBpX1vAvSI+ir1Y6R1VNNZHgE42tNCq+S45W9XyCB4cVee+jvnlywvRD0JojkH3kF4NJNVoIB41yoqn/ntcfO7TKfpQfrynGIQdAy2fiTzLgL2rgUXTYNapO0/vuu0pQ1Q9AcNSlm8vnuSPXG2yKyMcmUwd0Fnuru2ShiVR4SfKwHk6XMdz7J5Ztv2/8nu+LKuymapFuCxrOfjiVswWf+W5apXC9JkbTsJ3VtTaF8v5XTL23mX5g7yBhNTVele8X2HkSbqDIEpOQdfSu1d2m3gYDfXE2ZcahC+fYpQPqmALucTb84FyWIlgF1t32va0/iTUzODF9aqRyo0ZVCnBFuZaWwjKxYneI0irhEtg++O5zpvu9lVnvGq7NdbQwO4u1x+Ew2jJJhSXnR8WSdbnDyjIGhbglNErX056E5L2KCt9f/WAB/FVyojYMUYnC5hczGJI24tYNt2CpMQ2gvVtaF6gDdM3B4zwgUCOgwojI+49kAaIm67m0yvEVntjzGXV244vxvgm0qM4N75bELuEg4tRFaKQ6xlXBm3Da2YbaLmhWla+om9UiVS0KJMSO24gPrN8lvKMZrDKHknkB+7UUo1p54di1g25uPvYM+snH2R/uJ+pPXWOh/pIZ9sKToJUbUMOwi0SxrugsdAWWXv4ucCFkHWaip4OPYdn3YR/L35C0QmBgNvC9jrezgsXzu6LJxE/BzShlGP28gcQYw/CRn6BTXmLQDYWRFBbbj94t+E905UMEy3RodgFZuGw5iFQw4df8+C9u0PmvmPZdZXMdQcuLrx82uqoTSsMacE4N8COEGQFQ52WMF86JJY1t+KTl+v8BkdqODOfDglUzABRILZOYQ+eluuUr8EukyIRu6E9RxAGIUo3HtcsXIWVspWJ7PKovQ2FSTRAqOnVTO4nqKKOdxnwfKTvHsOmDLoWtRaKdygg3CBXOeruAknFniDwfPXsZZZRbqqT67OtHy9dZuaWJyuILHyzQW1fgtVTIZB618d0IFGLCZFAVhCnDCEVHRDPcpJF5a7bn0drqKktDDto0x8XIVTbZ439NxgB",
+          "thinking": "The duplicates showed up in the March 2026 reload, but those affect payments unrelated to Q3 loss dates since claims with Q3 loss dates can't have March payments. So I don't think deduping is actually needed here, but I'll double check by computing based on loss_date in Q3 2026 and summing all payments, which naturally excludes the reload duplicates anyway.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01A349Mp6QybwrwSmXvjcxsh",
+          "input": {
+            "sql": "WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload-%' GROUP BY 1), pa AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT count(*) claims, sum(c.reserve_amount) reserve, sum(coalesce(p.paid,0)) paid_excl_reload, sum(coalesce(pa.paid,0)) paid_all, sum(coalesce(p.paid,0)+c.reserve_amount) incurred FROM c LEFT JOIN p USING(claim_id) LEFT JOIN pa USING(claim_id)"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01A349Mp6QybwrwSmXvjcxsh",
+          "content": "{\"columns\": [\"claims\", \"reserve\", \"paid_excl_reload\", \"paid_all\", \"incurred\"], \"rows\": [[608, 4358907.22, 5115872.5, 5115872.5, 9474779.72]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS3wUKEAgSGAI4AUIIdGhpbmtpbmcSDEQ2crNQ0cRaSF3phhoMeFIHsjTS87rslNtuIjAXoity1CIRPjJylXAHFNYTLXwIm1XPF0EYl68YvBKLuspSNhTuuqE397WWM3uumAYq/ATk0iuvLD7QvK0MeLbJFG7RNCHHI7rQAQ7I219tkjeAPvREAB5NgMVAYoTN67/sL08EBH0QPhlhStmlOU8imebc/LZ26+J0UdxoQNvSWiqePRnf1Q71VaeHjNXzDq6OqfNnJPqu8pIH2YSYkJw6zhGUk+7N8RtD+VzOW7A7qrU7/p2hVAtNYJBG0OmmdZYMFBk6YhfL959aZuhwJSBR6ep0/kpJxvzQeklIkxeyy90Rs56QyHY9VG2H1wJKmOV8chxS5mNzG0DAXJr2yILeFVnQx5gSexTERMZvrZWlFyiiUJb/N4+yToE13a/E0Qv4AUdbMn8tAgXAX4qdyaa+mC+Ds6RrzwMIm7SAtyt2nG1Gy9i9SLUliPrPbUwmCOckV46qE3sv2IpXsAptHwLnVjC8QPnMT1Z2j6g0Ma29xSs54l+4ESyIlYo5qAz/v1P4zmPnlBLo1petXcyj+jdG8grwzl4d0xii3gOy0Yu0AbYmeFvigueycm9FCrVkbkQL0etx+br2TVys4ON78TUM7KxaMxoJ/Vu/SN3p4LVpIr5Bk7skTdms4D3XvdHv7WvNdhshXkQQf/wZWD10NXZEskNHzPpm3opdIil+Qc7N6Jh7+g6AmY+/Fw9ZcM3jKSs0jMEVhAZp+nIW9Qw4DYVToUSZ386qb7fkYQROPQq3BOEnUdOE4nFEpxwIRWRF5uFVnGxeaGPUVLI1DABzBlXiHbGrWczDXAdEPzLPQrSdtYxEpz7G3+TQxRpC8JSSTP/bLq4vqxcroReBGkuUgLPQNkWxxGh/cvDOUHfuts9lp69szScESWjwmBHGMPdr/2X/aNO6im+EImB2w4ClKuIYAQ==",
+          "thinking": "Good, the reload rows don't impact the Q3 claims figures, so I can finalize the answer.\n\n",
+          "type": "thinking"
+        },
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Total incurred losses (paid plus reserve) on home claims with a loss date from 2026-07-01 to 2026-09-30. I counted claims by loss date. Paid is the sum of all payments on those claims in claim_payments. Reserve is the current reserve_amount.\",\"answer\":\"Home incurred losses for Q3 2026 were about $9.47M across 608 claims. That is $5.12M paid plus $4.36M in open reserves. Q3 is not complete: late September losses are still being reported (about 79% of September claims were in by the extract date). Incurred will probably rise as those claims arrive and as reserves develop.\",\"answer_sql\":\"WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT sum(coalesce(p.paid,0)+c.reserve_amount) AS incurred_losses, sum(coalesce(p.paid,0)) AS paid, sum(c.reserve_amount) AS reserve, count(*) AS claims FROM c LEFT JOIN p USING(claim_id)\",\"findings\":[{\"claim\":\"Home incurred for Q3 2026 loss dates is about $9.47M, made up of $5.12M paid and $4.36M reserve, over 608 claims.\",\"evidence_sql\":\"WITH c AS (SELECT claim_id, reserve_amount FROM claims WHERE product='home' AND loss_date BETWEEN '2026-07-01' AND '2026-09-30'), p AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT count(*) claims, sum(c.reserve_amount) reserve, sum(coalesce(p.paid,0)) paid, sum(coalesce(p.paid,0)+c.reserve_amount) incurred FROM c LEFT JOIN p USING(claim_id)\",\"key_numbers\":[{\"label\":\"Incurred\",\"value\":9474779.72,\"unit\":\"USD\"},{\"label\":\"Paid\",\"value\":5115872.5,\"unit\":\"USD\"},{\"label\":\"Reserve\",\"value\":4358907.22,\"unit\":\"USD\"},{\"label\":\"Claims\",\"value\":608,\"unit\":\"claims\"}],\"confidence\":\"medium\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"Recent claims are still being reported. About 79% of September 2026 claims were in by the extract date.\",\"impact\":\"Q3 incurred is understated, and September is the most affected month.\"},{\"issue\":\"The reload-2026-03-14 batch has 159 duplicate payment rows, for payments dated March 2026.\",\"impact\":\"None on this answer. I checked, and excluding that batch gives the same paid total for Q3 claims.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payment rows from reload-2026-03-14\",\"reason\":\"159 payment rows repeat existing payments and would inflate paid and incurred figures for March 2026 claims.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,379 @@
+{
+  "case_id": "what-top-states-by-loss-ratio-3-home-2025",
+  "repeat": 1,
+  "question": "Which 3 states had the highest home loss ratio in 2025?",
+  "role": "head_of_claims",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Home loss ratio is incurred losses (paid plus reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and grouped them by policy state. I ranked all 8 states and took the top 3.",
+    "answer": "The three states with the highest home loss ratio in 2025 were the Northern Territory at 76.7%, the ACT at 73.5% and NSW at 70.1%. Tasmania was next at 68.7%. Western Australia was lowest at 48.5%. 2025 losses are mature, so late reporting should not distort these figures much.",
+    "answer_sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+    "findings": [
+      {
+        "claim": "NT, ACT and NSW had the highest home loss ratios in 2025.",
+        "evidence_sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+        "key_numbers": [
+          {
+            "label": "NT",
+            "value": 0.767,
+            "unit": "ratio"
+          },
+          {
+            "label": "ACT",
+            "value": 0.735,
+            "unit": "ratio"
+          },
+          {
+            "label": "NSW",
+            "value": 0.701,
+            "unit": "ratio"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "Claims table has 21 extreme reserve_amount values (largest 1,221,343), which could inflate the incurred figure for a small state.",
+        "impact": "This could raise the loss ratio for small states such as NT and ACT. I did not check whether any of these extreme reserves are on home claims in those states."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.04338,
+  "seconds": 17.99,
+  "tool_calls": [
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "loss_ratio"
+      },
+      "source": null
+    },
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "loss_ratio",
+        "dimensions": [
+          "state"
+        ],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "home"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2025-01-01",
+        "end": "2025-12-31"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH numerator AS (\n    WITH source AS (\n        SELECT c.*, p.channel, p.metro,\n               coalesce(pay.paid, 0) AS paid_to_date,\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n               c.close_date - c.report_date AS days_to_close\n        FROM claims c\n        JOIN policies p USING (policy_id)\n        LEFT JOIN (\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n        ) pay USING (claim_id)\n    )\n    SELECT state, sum(incurred) AS value\n    FROM source\n    WHERE loss_date >= DATE '2025-01-01'\n      AND loss_date <= DATE '2025-12-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n),\ndenominator AS (\n    WITH source AS (\n        SELECT * FROM exposure_monthly\n    )\n    SELECT state, sum(earned_premium) AS value\n    FROM source\n    WHERE month >= DATE '2025-01-01'\n      AND month <= DATE '2025-12-31'\n      AND product IN ('home')\n    GROUP BY ALL\n    ORDER BY ALL\n)\nSELECT state, 1 * numerator.value / nullif(denominator.value, 0) AS value\nFROM numerator JOIN denominator USING (state)\nORDER BY ALL",
+      "rows": 8,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+      },
+      "source": "custom_query",
+      "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+      },
+      "source": "custom_query",
+      "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3",
+      "rows": 3,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-39986f0adf39",
+      "run_id": "r-6e81e209d652",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 53,
+      "cache_read_input_tokens": 14290,
+      "cache_creation_input_tokens": 169,
+      "cost_usd": 0.003818,
+      "seconds": 2.19,
+      "request_id": "req_011Cg8kn98HnCJ5TgQvjgDWt"
+    },
+    {
+      "session_id": "s-39986f0adf39",
+      "run_id": "r-6e81e209d652",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 242,
+      "cache_read_input_tokens": 14459,
+      "cache_creation_input_tokens": 150,
+      "cost_usd": 0.005691,
+      "seconds": 3.0,
+      "request_id": "req_011Cg8knJMfb5X6VFN955Q1j"
+    },
+    {
+      "session_id": "s-39986f0adf39",
+      "run_id": "r-6e81e209d652",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 353,
+      "cache_read_input_tokens": 14609,
+      "cache_creation_input_tokens": 1631,
+      "cost_usd": 0.010533,
+      "seconds": 2.55,
+      "request_id": "req_011Cg8knXb9NW5rRHMx5vUxV"
+    },
+    {
+      "session_id": "s-39986f0adf39",
+      "run_id": "r-6e81e209d652",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 353,
+      "cache_read_input_tokens": 16240,
+      "cache_creation_input_tokens": 420,
+      "cost_usd": 0.007832,
+      "seconds": 3.11,
+      "request_id": "req_011Cg8kniah64ezw7K4AVPhM"
+    },
+    {
+      "session_id": "s-39986f0adf39",
+      "run_id": "r-6e81e209d652",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1112,
+      "cache_read_input_tokens": 16660,
+      "cache_creation_input_tokens": 420,
+      "cost_usd": 0.015506,
+      "seconds": 6.75,
+      "request_id": "req_011Cg8knx5JSMtJDmFPDwYtL"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-39986f0adf39",
+  "run_id": "r-6e81e209d652",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "citations": {
+    "cited": 0,
+    "confirmed": 0,
+    "without_version": 0,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+1ba489d548",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Head of Claims. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Which 3 states had the highest home loss ratio in 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01JREUaKHMAK81eTr6u7Uxtt",
+          "input": {
+            "name": "loss_ratio"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JREUaKHMAK81eTr6u7Uxtt",
+          "content": "{\"name\": \"loss_ratio\", \"label\": \"Loss ratio\", \"description\": \"Incurred losses divided by earned premium.\", \"unit\": \"ratio\", \"dimensions\": [\"state\", \"region\", \"product\"], \"definition\": \"1 * incurred_losses / earned_premium\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01JYkdBYiuUYVzfTLRLur8VG",
+          "input": {
+            "metric": "loss_ratio",
+            "dimensions": [
+              "state"
+            ],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "home"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2025-01-01",
+            "end": "2025-12-31"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01Nj6gCSkaUBsXKcMKCn6zmT",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JYkdBYiuUYVzfTLRLur8VG",
+          "content": "{\"metric\": \"loss_ratio\", \"label\": \"Loss ratio\", \"unit\": \"ratio\", \"definition\": \"1 * incurred_losses / earned_premium\", \"sql\": \"WITH numerator AS (\\n    WITH source AS (\\n        SELECT c.*, p.channel, p.metro,\\n               coalesce(pay.paid, 0) AS paid_to_date,\\n               coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n               c.close_date - c.report_date AS days_to_close\\n        FROM claims c\\n        JOIN policies p USING (policy_id)\\n        LEFT JOIN (\\n            SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n        ) pay USING (claim_id)\\n    )\\n    SELECT state, sum(incurred) AS value\\n    FROM source\\n    WHERE loss_date >= DATE '2025-01-01'\\n      AND loss_date <= DATE '2025-12-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n),\\ndenominator AS (\\n    WITH source AS (\\n        SELECT * FROM exposure_monthly\\n    )\\n    SELECT state, sum(earned_premium) AS value\\n    FROM source\\n    WHERE month >= DATE '2025-01-01'\\n      AND month <= DATE '2025-12-31'\\n      AND product IN ('home')\\n    GROUP BY ALL\\n    ORDER BY ALL\\n)\\nSELECT state, 1 * numerator.value / nullif(denominator.value, 0) AS value\\nFROM numerator JOIN denominator USING (state)\\nORDER BY ALL\", \"columns\": [\"state\", \"value\"], \"rows\": [[\"ACT\", 0.7352501974715373], [\"NSW\", 0.70114434551407], [\"NT\", 0.7671075261610939], [\"QLD\", 0.5634423825813981], [\"SA\", 0.5202521208142546], [\"TAS\", 0.6874100756649387], [\"VIC\", 0.59482007477015], [\"WA\", 0.4853902976827981]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Nj6gCSkaUBsXKcMKCn6zmT",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, postcode, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 249. Empty as documented: close_date: 565, repair_shop_id: 3877.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"21 values of reserve_amount are far above the rest (above 65,947; the largest is 1,221,343).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_018GFEnL43KgY6g8KpJNqXj6",
+          "input": {
+            "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_018GFEnL43KgY6g8KpJNqXj6",
+          "content": "{\"columns\": [\"state\", \"loss_ratio\"], \"rows\": [[\"NT\", 0.767], [\"ACT\", 0.735], [\"NSW\", 0.701]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01FtKdN11J4nj83dXZGjKBqW",
+          "input": {
+            "sql": "WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01FtKdN11J4nj83dXZGjKBqW",
+          "content": "{\"columns\": [\"state\", \"loss_ratio\"], \"rows\": [[\"NT\", 0.767], [\"ACT\", 0.735], [\"NSW\", 0.701]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Home loss ratio is incurred losses (paid plus reserve) divided by earned premium. I counted claims by loss date in calendar 2025 and grouped them by policy state. I ranked all 8 states and took the top 3.\",\"answer\":\"The three states with the highest home loss ratio in 2025 were the Northern Territory at 76.7%, the ACT at 73.5% and NSW at 70.1%. Tasmania was next at 68.7%. Western Australia was lowest at 48.5%. 2025 losses are mature, so late reporting should not distort these figures much.\",\"answer_sql\":\"WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3\",\"findings\":[{\"claim\":\"NT, ACT and NSW had the highest home loss ratios in 2025.\",\"evidence_sql\":\"WITH n AS (SELECT c.state, sum(coalesce(pay.paid,0)+c.reserve_amount) AS inc FROM claims c LEFT JOIN (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY claim_id) pay USING (claim_id) WHERE c.product='home' AND c.loss_date BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' GROUP BY c.state), d AS (SELECT state, sum(earned_premium) ep FROM exposure_monthly WHERE product='home' AND month BETWEEN DATE '2025-01-01' AND DATE '2025-12-01' GROUP BY state) SELECT state, round(n.inc/d.ep,3) AS loss_ratio FROM n JOIN d USING (state) ORDER BY 2 DESC LIMIT 3\",\"key_numbers\":[{\"label\":\"NT\",\"value\":0.767,\"unit\":\"ratio\"},{\"label\":\"ACT\",\"value\":0.735,\"unit\":\"ratio\"},{\"label\":\"NSW\",\"value\":0.701,\"unit\":\"ratio\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"Claims table has 21 extreme reserve_amount values (largest 1,221,343), which could inflate the incurred figure for a small state.\",\"impact\":\"This could raise the loss ratio for small states such as NT and ACT. I did not check whether any of these extreme reserves are on home claims in those states.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

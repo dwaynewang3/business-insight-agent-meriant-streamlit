@@ -1,0 +1,559 @@
+{
+  "case_id": "why-southeast-open-claims",
+  "repeat": 1,
+  "question": "Why do Southeast adjusters have so many more open claims than adjusters in other regions?",
+  "role": "claims_ops_manager",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Names the key evidence."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Open claims per active adjuster by region, as of the 2026-09-30 snapshot. 'Open' means claims with status = open. Active adjusters are those with no leave_date. I compared regions on open claims per adjuster and tested staffing, workload, claim mix and data problems as explanations.",
+    "answer": "The premise is correct. Southeast has 51.5 open claims per active adjuster, against 18.0 in North, 13.5 in Texas and 11.3 in California. The main cause is staffing. Two of the six Southeast adjusters (ADJ-016 and ADJ-017) left on 2026-05-01 and 2026-05-15, so 4 adjusters now carry the whole region. Both leavers now have 0 open claims, so their open work has been reassigned to the remaining four. Those four each handle 374 to 428 claims in total and 44 to 60 open ones. Southeast also has a higher share of open claims, 10.1% against 5.7% to 6.6% elsewhere. Its average time to close is about 33 days against about 30 elsewhere, and it has 10 open claims reported before July 2026, against 1 to 3 in other regions. Claim mix does not explain the gap: Southeast's open claims per adjuster are far higher on any measure. Most of Southeast's open claims are recent (196 reported since July), so part of the backlog is normal pipeline. The caseload per adjuster is what makes it large.",
+    "answer_sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc",
+    "findings": [
+      {
+        "claim": "Southeast has the highest open claims per active adjuster, by a wide margin.",
+        "evidence_sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters from claims c join adjusters a using(adjuster_id) group by c.region",
+        "key_numbers": [
+          {
+            "label": "Southeast open per active adjuster",
+            "value": 51.5,
+            "unit": "claims"
+          },
+          {
+            "label": "North",
+            "value": 18.0,
+            "unit": "claims"
+          },
+          {
+            "label": "Texas",
+            "value": 13.5,
+            "unit": "claims"
+          },
+          {
+            "label": "California",
+            "value": 11.3,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Two Southeast adjusters left in May 2026 and have no open claims. Four adjusters carry the region's 206 open claims.",
+        "evidence_sql": "select a.adjuster_id, a.leave_date, count(c.claim_id) claims, count(*) filter (where c.status='open') open_c from adjusters a left join claims c on c.adjuster_id=a.adjuster_id where a.region='Southeast' group by all",
+        "key_numbers": [
+          {
+            "label": "Adjusters who left",
+            "value": 2,
+            "unit": "adjusters"
+          },
+          {
+            "label": "Southeast open claims",
+            "value": 206,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "The Southeast backlog is also slower and older: higher open share, slower closing, and more open claims from before July.",
+        "evidence_sql": "select region, count(*) filter (where status='open' and report_date<date '2026-07-01') open_old, round(avg(date_diff('day',report_date,close_date)),1) avg_close_days, round(100.0*count(*) filter (where status='open')/count(*),1) pct_open from claims group by region",
+        "key_numbers": [
+          {
+            "label": "Southeast % open",
+            "value": 10.1,
+            "unit": "%"
+          },
+          {
+            "label": "Southeast avg days to close",
+            "value": 33.0,
+            "unit": "days"
+          },
+          {
+            "label": "Southeast open claims reported before July",
+            "value": 10,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Adjuster departures left Southeast understaffed",
+        "verdict": "supported",
+        "evidence": "4 active adjusters against 7 to 8 elsewhere. Two left in May 2026 and their work has been reassigned."
+      },
+      {
+        "hypothesis": "Southeast has more claim volume",
+        "verdict": "inconclusive",
+        "evidence": "Southeast has 2,031 claims in total against 2,206 in North, so volume alone doesn't explain it. Per active adjuster the load is much higher because there are fewer adjusters."
+      },
+      {
+        "hypothesis": "Data problem such as duplicated rows",
+        "verdict": "ruled_out",
+        "evidence": "The claims table has no duplicate rows. The latest month is incomplete, but that affects all regions."
+      },
+      {
+        "hypothesis": "Mix of long-tail claims (bodily injury or liability)",
+        "verdict": "inconclusive",
+        "evidence": "Southeast adjusters hold more of these open (7 to 14 each) but the main gap is in all open claims, so it's not the main driver."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "The latest month's claims are still being reported (about 79% of September claims reported by the extract date).",
+        "impact": "Open counts for all regions will change. It doesn't explain the Southeast gap."
+      }
+    ],
+    "charts": [
+      {
+        "title": "Open claims per active adjuster by region",
+        "sql": "select c.region, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region",
+        "type": "bar",
+        "x": "region",
+        "y": "open_per_active_adjuster"
+      }
+    ],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Rebalance or backfill Southeast adjuster capacity",
+        "reason": "Southeast has 4 active adjusters, each with about 51 open claims, since two left in May 2026."
+      }
+    ],
+    "open_questions": [
+      "Was the departed adjusters' work reassigned only to the four Southeast adjusters, or is hiring under way?"
+    ]
+  },
+  "error": null,
+  "cost_usd": 0.05923,
+  "seconds": 29.71,
+  "tool_calls": [
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where c.status='open') adj_with_open, (select count(*) from adjusters a where a.region=c.region and a.leave_date is null) active_adj, (select count(*) from adjusters a where a.region=c.region) all_adj, count(*) total from claims c group by c.region"
+      },
+      "source": "custom_query",
+      "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where c.status='open') adj_with_open, (select count(*) from adjusters a where a.region=c.region and a.leave_date is null) active_adj, (select count(*) from adjusters a where a.region=c.region) all_adj, count(*) total from claims c group by c.region",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select a.region, a.adjuster_id, a.hire_date, a.leave_date, count(c.claim_id) claims, count(*) filter (where c.status='open') open_c, round(avg(date_diff('day',c.report_date,c.close_date)),1) avg_days_close, count(*) filter (where c.status='open' and c.report_date<date '2026-06-30') old_open, count(*) filter (where c.status='open' and c.cause in ('bodily_injury','liability')) open_long from adjusters a left join claims c on c.adjuster_id=a.adjuster_id group by all order by 1,2"
+      },
+      "source": "custom_query",
+      "sql": "select a.region, a.adjuster_id, a.hire_date, a.leave_date, count(c.claim_id) claims, count(*) filter (where c.status='open') open_c, round(avg(date_diff('day',c.report_date,c.close_date)),1) avg_days_close, count(*) filter (where c.status='open' and c.report_date<date '2026-06-30') old_open, count(*) filter (where c.status='open' and c.cause in ('bodily_injury','liability')) open_long from adjusters a left join claims c on c.adjuster_id=a.adjuster_id group by all order by 1,2",
+      "rows": 28,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select region, count(*) filter (where status='open' and report_date<date '2026-07-01') open_old, count(*) filter (where status='open' and report_date>=date '2026-07-01') open_recent, round(avg(date_diff('day',report_date,close_date)),1) avg_close_days, round(100.0*count(*) filter (where status='open')/count(*),1) pct_open from claims group by region"
+      },
+      "source": "custom_query",
+      "sql": "select region, count(*) filter (where status='open' and report_date<date '2026-07-01') open_old, count(*) filter (where status='open' and report_date>=date '2026-07-01') open_recent, round(avg(date_diff('day',report_date,close_date)),1) avg_close_days, round(100.0*count(*) filter (where status='open')/count(*),1) pct_open from claims group by region",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select region, count(*) filter (where report_date>=date '2026-05-01') claims_since_may, count(distinct adjuster_id) adj, round(count(*) filter (where report_date>=date '2026-05-01')*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter (where status='open') open_c, round(count(*) filter (where status='open')*1.0/count(distinct adjuster_id),1) open_per_adj from claims group by region order by 1"
+      },
+      "source": "custom_query",
+      "sql": "select region, count(*) filter (where report_date>=date '2026-05-01') claims_since_may, count(distinct adjuster_id) adj, round(count(*) filter (where report_date>=date '2026-05-01')*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter (where status='open') open_c, round(count(*) filter (where status='open')*1.0/count(distinct adjuster_id),1) open_per_adj from claims group by region order by 1",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc"
+      },
+      "source": "custom_query",
+      "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc"
+      },
+      "source": "custom_query",
+      "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc",
+      "rows": 4,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 226,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 177,
+      "cost_usd": 0.004289,
+      "seconds": 2.27,
+      "request_id": "req_011Cg284PN9ueddY67MWH6JR"
+    },
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 488,
+      "cache_read_input_tokens": 8072,
+      "cache_creation_input_tokens": 1001,
+      "cost_usd": 0.009001,
+      "seconds": 3.75,
+      "request_id": "req_011Cg284Z5Jmat3Nnk6iutpW"
+    },
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 411,
+      "cache_read_input_tokens": 9073,
+      "cache_creation_input_tokens": 1885,
+      "cost_usd": 0.010641,
+      "seconds": 4.98,
+      "request_id": "req_011Cg284qJNmANchjbKbZQcp"
+    },
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 272,
+      "cache_read_input_tokens": 10958,
+      "cache_creation_input_tokens": 566,
+      "cost_usd": 0.006331,
+      "seconds": 2.82,
+      "request_id": "req_011Cg285ChUcgxuEyQCi6t3p"
+    },
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 197,
+      "cache_read_input_tokens": 11524,
+      "cache_creation_input_tokens": 390,
+      "cost_usd": 0.005254,
+      "seconds": 1.83,
+      "request_id": "req_011Cg285QsE5n4ropGdzMzjW"
+    },
+    {
+      "session_id": "s-3a523f9c14b1",
+      "run_id": "r-7042e14cfb80",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2054,
+      "cache_read_input_tokens": 11914,
+      "cache_creation_input_tokens": 315,
+      "cost_usd": 0.023714,
+      "seconds": 13.62,
+      "request_id": "req_011Cg285YnxzFm2ySkFKBPze"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Rebalance or backfill Southeast adjuster capacity",
+      "reason": "Southeast has 4 active adjusters, each with about 51 open claims, since two left in May 2026."
+    }
+  ],
+  "session_id": "s-3a523f9c14b1",
+  "run_id": "r-7042e14cfb80",
+  "numbers": {
+    "checked": 9,
+    "confirmed": 5,
+    "unconfirmed": [
+      {
+        "finding": 0,
+        "label": "Southeast open per active adjuster",
+        "value": 51.5,
+        "unit": "claims",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "North",
+        "value": 18.0,
+        "unit": "claims",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "Texas",
+        "value": 13.5,
+        "unit": "claims",
+        "reason": "Not in the result of its finding's SQL."
+      },
+      {
+        "finding": 0,
+        "label": "California",
+        "value": 11.3,
+        "unit": "claims",
+        "reason": "Not in the result of its finding's SQL."
+      }
+    ]
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims operations manager. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why do Southeast adjusters have so many more open claims than adjusters in other regions?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_0153aqyfBwzK4qn81uwMBYGJ",
+          "input": {
+            "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where c.status='open') adj_with_open, (select count(*) from adjusters a where a.region=c.region and a.leave_date is null) active_adj, (select count(*) from adjusters a where a.region=c.region) all_adj, count(*) total from claims c group by c.region"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01P8q6zLpQjJv4Denwbg1Ro3",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0153aqyfBwzK4qn81uwMBYGJ",
+          "content": "{\"columns\": [\"region\", \"open_claims\", \"adj_with_open\", \"active_adj\", \"all_adj\", \"total\"], \"rows\": [[\"California\", 79, 7, 7, 7, 1192], [\"Texas\", 108, 8, 8, 8, 1654], [\"North\", 126, 7, 7, 7, 2206], [\"Southeast\", 206, 4, 4, 6, 2031]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01P8q6zLpQjJv4Denwbg1Ro3",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, zip, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 209. Empty as documented: close_date: 519, repair_shop_id: 3142.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"15 values of reserve_amount are far above the rest (above 52,616; the largest is 178,549).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 4 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS/gUKEAgSGAI4AUIIdGhpbmtpbmcSDEG+sEB6ywBZ6gMvpRoMGz9Iy7y7O3u7ueZyIjBEpUfrWgRNFvcUoUp+cO4m9+qp8DzloohpcqLhKUzkGsuWNyBRjZ/OHVRcoYAyhm8qmwUAYpjyrjScy5uDegQk+BcEhG9XiKacNWjwFP1EJBR6o8znc4KweJhO71W1cIOyMiT/bKg4N9y4iDeD6aloJ2owa/QcyXYlCPI8FaKzsfMHpTdc4gpEGZ9rbfqR1qqr4FAEdjxEmrHAfxb9ZxG5jI4plnGkUKeCPgXg245PFewV5v1pgZIl7i8i7261xiF/614kXk0IsFNDjNTQD3jdRL9Ju16a8TScMw6uliigxqLh7dCoX0TMTRXie9bXj5YvLBPv6rqbyzVrKupqVzJCQN/7EyNzgClYR1Bhu84wzqgbWa7OUQVoc6iVo6j+ZQas9s+llqHDu9psPwmRdHKRqg8jg33AOSPPl+l+u5FtvuHW4L2y9o/XIh/i9BoBxaaJEJN3py2Wd3J4LmIJKlg9Qdx2DJ8rDZsi0++lrq37QntVeUHmmKbiEdrZSnVSAdZL0QvLK9YT6drqvSN86YSrNEKos47dkeaKHEIjoTY9AZ7463jBw0xtJCT5FYH6dgnDLhVWYEDS1zd7hx9fEQjLx2MiTZ2yd+Ybvz5XgmJoj2UNyNnaVRxUbLZucmaCD+UStfBmKMeiqmojWbJk9AwZ+xmUwJBWN3zKhHwmJe6TZLL9IjBz6Z5l0JQcKTGC0wAjEDryI6PTajGOCHwA5Nj0YVEaLOzTFHLH1yMJ1oSU28fVGfd/a8QpPCbMYOV+cfhJfYfe1gpcQXrMuJm/IyXBX3oaxzV1pb0EQEmbAAXm3ey34FcBNM6GvdD4W+zot2GkMLFRDE4Cz8LPkuQHCnA+td/4JQBP2XrPnV1eU2YZ1TXwdmC88HnAhaXmfV0/izcs86kiXcvew6sAdRWVm/902O697mH8kuQ/w9T1OyGRmZSNv+LzF4ARUSkRXQcPGAE=",
+          "thinking": "I'm noting that Southeast has 4 active adjusters with 2 who've left, so I should check what claims are still assigned to those departed adjusters, along with open claims and volume broken down per remaining adjuster.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01P5Z7mVKfnQtzZQk9AoArM5",
+          "input": {
+            "sql": "select a.region, a.adjuster_id, a.hire_date, a.leave_date, count(c.claim_id) claims, count(*) filter (where c.status='open') open_c, round(avg(date_diff('day',c.report_date,c.close_date)),1) avg_days_close, count(*) filter (where c.status='open' and c.report_date<date '2026-06-30') old_open, count(*) filter (where c.status='open' and c.cause in ('bodily_injury','liability')) open_long from adjusters a left join claims c on c.adjuster_id=a.adjuster_id group by all order by 1,2"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01E5tAKEPpwnxesE5SxD2tC4",
+          "input": {
+            "sql": "select region, count(*) filter (where status='open' and report_date<date '2026-07-01') open_old, count(*) filter (where status='open' and report_date>=date '2026-07-01') open_recent, round(avg(date_diff('day',report_date,close_date)),1) avg_close_days, round(100.0*count(*) filter (where status='open')/count(*),1) pct_open from claims group by region"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01P5Z7mVKfnQtzZQk9AoArM5",
+          "content": "{\"columns\": [\"region\", \"adjuster_id\", \"hire_date\", \"leave_date\", \"claims\", \"open_c\", \"avg_days_close\", \"old_open\", \"open_long\"], \"rows\": [[\"California\", \"ADJ-009\", \"2016-02-12\", null, 179, 12, 30.9, 1, 6], [\"California\", \"ADJ-010\", \"2019-05-23\", null, 179, 13, 28.3, 0, 3], [\"California\", \"ADJ-011\", \"2016-11-27\", null, 181, 12, 30.9, 0, 1], [\"California\", \"ADJ-012\", \"2023-10-02\", null, 160, 11, 29.5, 0, 1], [\"California\", \"ADJ-013\", \"2024-04-29\", null, 181, 10, 30.8, 0, 1], [\"California\", \"ADJ-014\", \"2020-06-23\", null, 167, 10, 30.4, 1, 4], [\"California\", \"ADJ-015\", \"2023-09-24\", null, 145, 11, 27.6, 0, 0], [\"North\", \"ADJ-022\", \"2021-02-20\", null, 300, 14, 30.2, 0, 0], [\"North\", \"ADJ-023\", \"2016-11-13\", null, 295, 22, 29.4, 1, 5], [\"North\", \"ADJ-024\", \"2021-12-12\", null, 328, 20, 29.9, 0, 4], [\"North\", \"ADJ-025\", \"2023-01-07\", null, 319, 14, 28.1, 0, 4], [\"North\", \"ADJ-026\", \"2022-05-11\", null, 327, 18, 31.1, 0, 4], [\"North\", \"ADJ-027\", \"2022-10-14\", null, 304, 20, 33.0, 0, 3], [\"North\", \"ADJ-028\", \"2020-06-11\", null, 333, 18, 28.3, 1, 2], [\"Southeast\", \"ADJ-016\", \"2016-10-24\", \"2026-05-01\", 231, 0, 29.6, 0, 0], [\"Southeast\", \"ADJ-017\", \"2021-02-04\", \"2026-05-15\", 228, 0, 33.2, 0, 0], [\"Southeast\", \"ADJ-018\", \"2021-02-23\", null, 381, 60, 32.9, 2, 14], [\"Southeast\", \"ADJ-019\", \"2018-12-24\", null, 389, 54, 34.9, 2, 12], [\"Southeast\", \"ADJ-020\", \"2020-12-20\", null, 374, 44, 33.3, 2, 7], [\"Southeast\", \"ADJ-021\", \"2017-03-30\", null, 428, 48, 33.1, 4, 12], [\"Texas\", \"ADJ-001\", \"2015-03-30\", null, 208, 14, 29.9, 0, 3], [\"Texas\", \"ADJ-002\", \"2019-01-05\", null, 189, 13, 30.8, 0, 3], [\"Texas\", \"ADJ-003\", \"2019-02-08\", null, 191, 11, 28.6, 1, 2], [\"Texas\", \"ADJ-004\", \"2022-05-13\", null, 224, 13, 31.1, 0, 1], [\"Texas\", \"ADJ-005\", \"2016-07-26\", null, 188, 16, 32.0, 0, 5], [\"Texas\", \"ADJ-006\", \"2019-10-28\", null, 211, 11, 29.0, 0, 5], [\"Texas\", \"ADJ-007\", \"2015-06-18\", null, 220, 17, 29.7, 0, 3], [\"Texas\", \"ADJ-008\", \"2021-02-16\", null, 223, 13, 30.4, 0, 0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01E5tAKEPpwnxesE5SxD2tC4",
+          "content": "{\"columns\": [\"region\", \"open_old\", \"open_recent\", \"avg_close_days\", \"pct_open\"], \"rows\": [[\"North\", 2, 124, 30.0, 5.7], [\"Texas\", 1, 107, 30.2, 6.5], [\"California\", 3, 76, 29.8, 6.6], [\"Southeast\", 10, 196, 33.0, 10.1]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSwAkKEAgSGAI4AUIIdGhpbmtpbmcSDN64VIfYfKPwUYO4xBoMSNpE2n5stawnPtcpIjBk017qqiA8YddKQo1U8L09Q5T/+oTpJVMqdMmxauhmL6hkROE+C2REjQ82R6UweZkq3QgZr58E3eMfoRBW0OFP86De/akZNQGYX3dcGd3TFTBYWfMe7B1w+Q8kxeRUEZ8zlqxoKz0yaujgnC4P6m4hmFZ60FqoSpppMxNjmNuiZ0qiT4Qd0Dn4jMkAGwU3jRk+zFIwtjtieU2BM04Wu89Mjt4tvnRH0WzTk+XtB5jg3bK/6V27EjcOF5oxygJXpSb/oPcdeKSpK5rWODMe4NU1fQWMNibnvtZNN4WEpkRDrXLxFhWlFWDeCb8ZoRNtZTQ66LZgCUV5GscnX/GtgVPIdA/NRmAuKZ2H4SsfsFegwUMd0IEFrs1fDIoJE+w13MBoWBQqBqZa+1JIb1BtibzZDYmSBRvagevHnFhHAFBRTc/3u3MgKRpx8fkNLvH+m2pYOUT7oShY6xzETq2Sup3gIuNo2XsemkhquwUu8Og73ZqQMTfCf2ufQckPEIhK8J88ThJNDG/HC/Cni5e0GMPQq2EpQ/QQWe2aiotzZDciw0lRV2TQMQBL6Rvi1vOFo7ksfnq1gM3gISuJRacA3CJnLcbpbPOgIiYTI4wpkXvFZomXLwtqMpzklU0E9DkPGpMLM/Z7sOUUAmU68u37hOj7sF6lk6QqvWz9uKvAHCmQBbKBA+uVy9ROZuUHCVcMM+lGePb9p/iGGdhP/xYeVOZ8Ubn+N5xKPWmbpG0hDJ2JMN61+/9AMnog9z3lmlybjzrcOv+sU7RKcJjrO4FmR763TAHVxbKGZWPb+JIBjGW46o5oW8TiQ7D9V7mXhC9iYRgL8ddtnYGNz83tSrPMu5TiCyb9amqTSFTYd7/k0ezhiPXVVEjcvXLFUA+OiSHPpyRvhlyUjVKGNruu2AaOK+KQuwSI2OY9w6i9bdAGyHXfoifJ7e4EHPzqfEwlyYU/deo9AQ5MJur6hEnD1cdublG45bse2DDtgS1dVGh5hpkr/uhOCj3FXM04hfmY+DMTDxnP//4e8hNcZNYHQUd4i2N3R1YLSTDAhG3HhznOwYAyssEGJJ+uq1wEYDU67+2Vj0OYmB1uwWAB2xw32gdgH5N08JS16PDna7lJS7J1z2qdfyVsgJDE8+7fScZhoqQPNjzOXfboKNYEdaGt2JSZfm3qLZ8Iu5lxaPPkh23TkARdAbMNWdRuNfRrv2P85AMzUTdeBGggWgEwSNJpfiwsdI6cdkfI+9vdhbuPaYw9kpZBR1/ZSkBuOFrsj8Q+9/LKS4mIRnC9FHuLTQlBLpY+bdCYlcFIyDbb4HGJqT1nK63Fa+enSg6dPMzlM3qCocFnsBTzV7L/T2Q6E8szi4Vf1YJZZ/biAbTNX0nybYOFVxD8ukpiXIjBgVhJ8+TkemSCvxq/tmFGfwNLRpWNV5lrKuVqWESc2yAQ0G1CWdgmCLiROVz+uECHCCcqLiYV9zhbXm0e2bi9cmOzBO9trki4cisZiA7TfjGxnWpQ9FElIlfP0QgphDQwLoLAEOOdCPdHgDuSwgWHl+MEuWVdkR5X8j8xGAE=",
+          "thinking": "Two Southeast adjusters left in May 2026 and their claims got redistributed to the remaining four, pushing Southeast's per-adjuster open claims to roughly 51 versus 18 in North, 13.5 in Texas, and 11 in California \u2014 an open share near 10.1% compared to about 6% elsewhere. I want to verify whether the leavers still show any open claims after their departure date and compare Southeast's open claims by report month against the other regions.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Wj1ZMnUZtt9PN8eepuKpaU",
+          "input": {
+            "sql": "select region, count(*) filter (where report_date>=date '2026-05-01') claims_since_may, count(distinct adjuster_id) adj, round(count(*) filter (where report_date>=date '2026-05-01')*1.0/count(distinct adjuster_id),1) per_adj, count(*) filter (where status='open') open_c, round(count(*) filter (where status='open')*1.0/count(distinct adjuster_id),1) open_per_adj from claims group by region order by 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Wj1ZMnUZtt9PN8eepuKpaU",
+          "content": "{\"columns\": [\"region\", \"claims_since_may\", \"adj\", \"per_adj\", \"open_c\", \"open_per_adj\"], \"rows\": [[\"California\", 380, 7, 54.3, 79, 11.3], [\"North\", 565, 7, 80.7, 126, 18.0], [\"Southeast\", 593, 6, 98.8, 206, 34.3], [\"Texas\", 652, 8, 81.5, 108, 13.5]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS5gYKEAgSGAI4AUIIdGhpbmtpbmcSDKH5BwWYsBSGDdludxoMx94ytjTrweFm9xUnIjDSzV57XYk+eIAFGC7CeDK9NxKLnzkfxDMRqrQLT6C++eGcTi01Ypt7bDfECunpHYgqgwY8/PxxWKu3cG1Hz1GeFCGxb6k+Ih3FBwzZLdCdwq6mjr7QXbCCxGkZHZIkfB+vx0y9zIyuJ8serhfxrASqzBIexrwXA/m55jktmxDVQ6KLj48rnyI/YllsxhOGgdhRdO/202vV8bsw0yJy1+2YruDIuag685p9hDnofC9M/vGTXEetzWFmcYMnc7jYbsFcN3qLa/xU44dMtfG8JSM+wFRfxM9cyHH/EIoiqOrC52wJ0zQdvj/WXANka8b63DkL50FynVTBTo9Ith2wpgFVzT5Y2g3zEOdBQbsblSZbmS1nfGTCbowNEqx7YXZcl7GXF6xF5aoS6ur8AP8bOcAjorLkmJzER5oWcHn7Pd6SmZsFad9pYw8n7WPMFNw1vqmMOdZOn31TH2l+qt63NGNe53by5m5x8xpUqdXanRZTLSawHFUqDxzMnHt1ezZ+LWGEwAZI8PRybrxptiNzkV7lroQX1cL+PaFLkuE2yuGfVSoYfCw6B5VsKeit5D40CkuhkuVogGuFveomPetmO3dQWYLDxwWewgIEsvDvIPPy1SOIBlk94TY2Irvy4ROthN00/8h4nr9AmYJ8lUTBCtvClc+waGuU02LlXO5sQ50QsR1rGAN00TOrcEdSRhqYMdvUv3kEB9vD0zpo/DT+X8oF59Avn5i5Crl96NbeYPOcU7KxBscsPGe1rwc+yY2q69vUVVrjhgJK2XrlOgt5WG3QLIEdRFulLdhg/48ro5XDonSwOnIL+q45SEzie93Ex8mAKQJ0EXsQkIYGSmFPt7Hap2XQbzZFVTJdUucs9SoSKw4VKInZn7/JE/f6wsk2V2mF8g2qFJjm31NNZ9CLhl/DEjd+ZWi4ZEQo0eEuNDxUD5oxFBgEvm4qs8itC/wJkOEsZLYaue3UeL7KottBpxeb0vJQdhPg403VKiBLLLzhNSYv+7BiOZIhYTYuPrrVo5xpr3Rig8cqi0fbHkjEnKhFb1y2oCDmQXsMXBXdGBE4gKXlz2SxdfhS61iOE03PdOmMRkHN6GQYAQ==",
+          "thinking": "The adjuster count includes departed staff since all 6 appear in claims records, so using only the 4 active ones gives 206/4 = 51.5, which checks out. I'll go with that for the answer.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Puiubuj3zrQWUQ57nhLR7g",
+          "input": {
+            "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Puiubuj3zrQWUQ57nhLR7g",
+          "content": "{\"columns\": [\"region\", \"open_claims\", \"active_adjusters\", \"open_per_active_adjuster\"], \"rows\": [[\"Southeast\", 206, 4, 51.5], [\"North\", 126, 7, 18.0], [\"Texas\", 108, 8, 13.5], [\"California\", 79, 7, 11.3]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01EQN8EJ4TnksQeRahVocrnw",
+          "input": {
+            "sql": "select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01EQN8EJ4TnksQeRahVocrnw",
+          "content": "{\"columns\": [\"region\", \"open_claims\", \"active_adjusters\", \"open_per_active_adjuster\"], \"rows\": [[\"Southeast\", 206, 4, 51.5], [\"North\", 126, 7, 18.0], [\"Texas\", 108, 8, 13.5], [\"California\", 79, 7, 11.3]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Open claims per active adjuster by region, as of the 2026-09-30 snapshot. 'Open' means claims with status = open. Active adjusters are those with no leave_date. I compared regions on open claims per adjuster and tested staffing, workload, claim mix and data problems as explanations.\",\"answer\":\"The premise is correct. Southeast has 51.5 open claims per active adjuster, against 18.0 in North, 13.5 in Texas and 11.3 in California. The main cause is staffing. Two of the six Southeast adjusters (ADJ-016 and ADJ-017) left on 2026-05-01 and 2026-05-15, so 4 adjusters now carry the whole region. Both leavers now have 0 open claims, so their open work has been reassigned to the remaining four. Those four each handle 374 to 428 claims in total and 44 to 60 open ones. Southeast also has a higher share of open claims, 10.1% against 5.7% to 6.6% elsewhere. Its average time to close is about 33 days against about 30 elsewhere, and it has 10 open claims reported before July 2026, against 1 to 3 in other regions. Claim mix does not explain the gap: Southeast's open claims per adjuster are far higher on any measure. Most of Southeast's open claims are recent (196 reported since July), so part of the backlog is normal pipeline. The caseload per adjuster is what makes it large.\",\"answer_sql\":\"select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region order by 4 desc\",\"findings\":[{\"claim\":\"Southeast has the highest open claims per active adjuster, by a wide margin.\",\"evidence_sql\":\"select c.region, count(*) filter (where c.status='open') open_claims, count(distinct c.adjuster_id) filter (where a.leave_date is null) active_adjusters from claims c join adjusters a using(adjuster_id) group by c.region\",\"key_numbers\":[{\"label\":\"Southeast open per active adjuster\",\"value\":51.5,\"unit\":\"claims\"},{\"label\":\"North\",\"value\":18.0,\"unit\":\"claims\"},{\"label\":\"Texas\",\"value\":13.5,\"unit\":\"claims\"},{\"label\":\"California\",\"value\":11.3,\"unit\":\"claims\"}],\"confidence\":\"high\"},{\"claim\":\"Two Southeast adjusters left in May 2026 and have no open claims. Four adjusters carry the region's 206 open claims.\",\"evidence_sql\":\"select a.adjuster_id, a.leave_date, count(c.claim_id) claims, count(*) filter (where c.status='open') open_c from adjusters a left join claims c on c.adjuster_id=a.adjuster_id where a.region='Southeast' group by all\",\"key_numbers\":[{\"label\":\"Adjusters who left\",\"value\":2,\"unit\":\"adjusters\"},{\"label\":\"Southeast open claims\",\"value\":206,\"unit\":\"claims\"}],\"confidence\":\"high\"},{\"claim\":\"The Southeast backlog is also slower and older: higher open share, slower closing, and more open claims from before July.\",\"evidence_sql\":\"select region, count(*) filter (where status='open' and report_date<date '2026-07-01') open_old, round(avg(date_diff('day',report_date,close_date)),1) avg_close_days, round(100.0*count(*) filter (where status='open')/count(*),1) pct_open from claims group by region\",\"key_numbers\":[{\"label\":\"Southeast % open\",\"value\":10.1,\"unit\":\"%\"},{\"label\":\"Southeast avg days to close\",\"value\":33.0,\"unit\":\"days\"},{\"label\":\"Southeast open claims reported before July\",\"value\":10,\"unit\":\"claims\"}],\"confidence\":\"medium\"}],\"hypotheses\":[{\"hypothesis\":\"Adjuster departures left Southeast understaffed\",\"verdict\":\"supported\",\"evidence\":\"4 active adjusters against 7 to 8 elsewhere. Two left in May 2026 and their work has been reassigned.\"},{\"hypothesis\":\"Southeast has more claim volume\",\"verdict\":\"inconclusive\",\"evidence\":\"Southeast has 2,031 claims in total against 2,206 in North, so volume alone doesn't explain it. Per active adjuster the load is much higher because there are fewer adjusters.\"},{\"hypothesis\":\"Data problem such as duplicated rows\",\"verdict\":\"ruled_out\",\"evidence\":\"The claims table has no duplicate rows. The latest month is incomplete, but that affects all regions.\"},{\"hypothesis\":\"Mix of long-tail claims (bodily injury or liability)\",\"verdict\":\"inconclusive\",\"evidence\":\"Southeast adjusters hold more of these open (7 to 14 each) but the main gap is in all open claims, so it's not the main driver.\"}],\"data_quality_issues\":[{\"issue\":\"The latest month's claims are still being reported (about 79% of September claims reported by the extract date).\",\"impact\":\"Open counts for all regions will change. It doesn't explain the Southeast gap.\"}],\"charts\":[{\"title\":\"Open claims per active adjuster by region\",\"sql\":\"select c.region, round(count(*) filter (where c.status='open')*1.0/count(distinct c.adjuster_id) filter (where a.leave_date is null),1) open_per_active_adjuster from claims c join adjusters a using(adjuster_id) group by c.region\",\"type\":\"bar\",\"x\":\"region\",\"y\":\"open_per_active_adjuster\"}],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Rebalance or backfill Southeast adjuster capacity\",\"reason\":\"Southeast has 4 active adjusters, each with about 51 open claims, since two left in May 2026.\"}],\"open_questions\":[\"Was the departed adjusters' work reassigned only to the four Southeast adjusters, or is hiring under way?\"]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

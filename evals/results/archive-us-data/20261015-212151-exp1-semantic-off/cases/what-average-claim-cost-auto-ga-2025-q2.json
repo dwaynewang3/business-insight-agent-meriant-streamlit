@@ -1,0 +1,312 @@
+{
+  "case_id": "what-average-claim-cost-auto-ga-2025-q2",
+  "repeat": 1,
+  "question": "What was the average claim cost for auto claims in Georgia in Q2 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost (severity) is incurred (paid plus reserve) divided by claim count. It covers auto claims in Georgia (GA) with a loss date from 2025-04-01 to 2025-06-30, which is Q2 2025. I counted claims by loss date. Payments come from the nightly batches only, which excludes the March 2026 reload that duplicated some rows.",
+    "answer": "The average auto claim cost in Georgia for Q2 2025 was about $5,505. That is $418,347 of incurred cost across 76 claims. Q2 2025 is old enough that late reporting should not materially affect it. The duplicated payment rows from the March 2026 reload don't touch these claims, so the figure is the same with or without them.",
+    "answer_sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) as claims, sum(coalesce(p.paid,0)+c.reserve_amount) as incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) as avg_claim_cost from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'",
+    "findings": [
+      {
+        "claim": "Average incurred cost per GA auto claim with a Q2 2025 loss date is about $5,505 across 76 claims.",
+        "evidence_sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'",
+        "key_numbers": [
+          {
+            "label": "claims",
+            "value": 76,
+            "unit": "claims"
+          },
+          {
+            "label": "incurred",
+            "value": 418347.24,
+            "unit": "USD"
+          },
+          {
+            "label": "average claim cost",
+            "value": 5504.57,
+            "unit": "USD"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "claim_payments has 159 duplicate rows from the reload-2026-03-14 batch, which covers payments dated 2026-03-02 to 2026-03-13.",
+        "impact": "None for this answer. No reload rows belong to GA auto claims with Q2 2025 loss dates, and the result is identical with or without them."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Remove duplicate payments from reload-2026-03-14",
+        "reason": "159 payment rows are exact repeats of existing rows and will overstate paid and incurred in other cuts of the data."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.028139,
+  "seconds": 16.19,
+  "tool_calls": [
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with p as (select claim_id, sum(amount) paid from claim_payments group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev, count(distinct c.claim_id) d from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+      },
+      "source": "custom_query",
+      "sql": "with p as (select claim_id, sum(amount) paid from claim_payments group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev, count(distinct c.claim_id) d from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+      },
+      "source": "custom_query",
+      "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "select count(*) from claim_payments r join claims c using(claim_id) where r.load_batch like 'reload-%' and c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+      },
+      "source": "custom_query",
+      "sql": "select count(*) from claim_payments r join claims c using(claim_id) where r.load_batch like 'reload-%' and c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-4a76395df62f",
+      "run_id": "r-646b042c79a6",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 279,
+      "cache_read_input_tokens": 6932,
+      "cache_creation_input_tokens": 173,
+      "cost_usd": 0.004617,
+      "seconds": 3.35,
+      "request_id": "req_011Cg3rx6v33ai7g4T6tXhVn"
+    },
+    {
+      "session_id": "s-4a76395df62f",
+      "run_id": "r-646b042c79a6",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 334,
+      "cache_read_input_tokens": 7105,
+      "cache_creation_input_tokens": 972,
+      "cost_usd": 0.007195,
+      "seconds": 3.61,
+      "request_id": "req_011Cg3rxMNw7XUUu2V4g25Ab"
+    },
+    {
+      "session_id": "s-4a76395df62f",
+      "run_id": "r-646b042c79a6",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 141,
+      "cache_read_input_tokens": 8077,
+      "cache_creation_input_tokens": 389,
+      "cost_usd": 0.004002,
+      "seconds": 1.94,
+      "request_id": "req_011Cg3rxcv58Yg4esFhAzsbA"
+    },
+    {
+      "session_id": "s-4a76395df62f",
+      "run_id": "r-646b042c79a6",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 1019,
+      "cache_read_input_tokens": 8466,
+      "cache_creation_input_tokens": 175,
+      "cost_usd": 0.012325,
+      "seconds": 6.94,
+      "request_id": "req_011Cg3rxmHcTxbtdkHjLRhK4"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Remove duplicate payments from reload-2026-03-14",
+      "reason": "159 payment rows are exact repeats of existing rows and will overstate paid and incurred in other cuts of the data."
+    }
+  ],
+  "session_id": "s-4a76395df62f",
+  "run_id": "r-646b042c79a6",
+  "numbers": {
+    "checked": 3,
+    "confirmed": 3,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+8f58416920",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost for auto claims in Georgia in Q2 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01YFHgHA4aVc9XgAJBTPw7m3",
+          "input": {
+            "sql": "with p as (select claim_id, sum(amount) paid from claim_payments group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev, count(distinct c.claim_id) d from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01PPCor7ZBN1gA7eELXn71vg",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01YFHgHA4aVc9XgAJBTPw7m3",
+          "content": "{\"columns\": [\"n\", \"incurred\", \"sev\", \"d\"], \"rows\": [[76, 418347.24, 5504.568947368421, 76]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01PPCor7ZBN1gA7eELXn71vg",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS5AYKEAgSGAI4AUIIdGhpbmtpbmcSDKJjxP6out035vT3TBoM6CSZSjGJqKcBAOSoIjBQr9hKk5ERD6nVC2UWV/JMMWZrvWH7Lo2dEqB9a4/FCCMLe1Reu11wkXJX2gJitKkqgQZInqlXgJmmpLkHGUsJVOv1G59wQoHTPU+f9x3HsTT1pfEWIr0XCzJVldGJH3Gyg7nO3sgS81cTKdKCRHHMZrO1iNEtLArz2NsavuVaCqtoO3MTuH3tgfQVQeSai7O8FERf1SKiPZ8MKdnrveZCl9igDQidR/E+iTDAyoZjdsndrc6m0p7NTnSCqCaxUejxjcKn7UCWNrUvRSQBTYAJ0Zp/aLtaQUxE3uOGbNUTljZy+6X9/p7hPsOTLn3kksZiG6Sr4VXHLX8Q2pGDLw3HSs5Mu/18yoN84U6MO445udEwkWowzuwMlmmAHKwIXg36OhRs7Ej5IvVlMTPEjFYZo+eESWyrkAgfIb9w3Rr14RAxLQDBpwmvyIfoABOk2p0+/8zlxivZ3bazdwZ1RVjiD8zddi6Hi4p5tohkkdf92D/XHnDrcvYFB+60TLrYgN0FC5Ks0GSaKvGLHoDgrY0aNBsiyKYIY40F7PR3VAvWglFXxyCTJCT4rm9p01vgZzdIpJcQO6ksrSw27ihPko9it0RKd6e8M1xejt3BpSsRB4ky81Mfr7gZZv16i+GpqErFZ3lmhsJobVooXQFs/AQhkZv1cMnIDBxwe3B+ANwMzJ+8bbvR1J+gM2r2FjjQg5cYoHrudF82hHvggYrtmf9hcPUuxGjXMKir3iHu+GKc9LDi6CrIMIElx77iOu6qmjTinQfdi4Z7yZmQfJrjJ/IEYjTsznUmYKSIoj2afeSxgZjk7r6faCGYAqOse5DF8PXDIkMmO0rjNyhlcsIMzPV6M7rdpiBMwUNZL9rXtfOTJ0R9b5b+PkSedw3wR0mp9wrd02v8O5G6zAnVkpN4lx+gPVFxgcjc5XF4dL/y/Ss2hP7FvDyUXMhKNba5KlZT0Yg6CMi/uRCVQUmqTYKQrG3fKdtEqreHIFPYipepaM1ZheLYkpW7HxmpDoGVjJ93rPesW4YVikisgUNYlOyP1nSdh6XgP4CEcHNIcgmEh7Cff5G8nph5KnDL7O+nm0J6CVJ3Ba2LGAE=",
+          "thinking": "I notice duplicates from the March 2026 reload batch that need to be excluded\u2014these are exact copies of existing claims, so I should filter out any load_batch matching 'reload-%' to avoid double-counting payments.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Ve7RK63UeCNMGwrifTiAh8",
+          "input": {
+            "sql": "with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Ve7RK63UeCNMGwrifTiAh8",
+          "content": "{\"columns\": [\"n\", \"incurred\", \"sev\"], \"rows\": [[76, 418347.24, 5504.568947368421]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_011cYZVnMPq7bqoa4jrSuwhj",
+          "input": {
+            "sql": "select count(*) from claim_payments r join claims c using(claim_id) where r.load_batch like 'reload-%' and c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_011cYZVnMPq7bqoa4jrSuwhj",
+          "content": "{\"columns\": [\"count_star()\"], \"rows\": [[0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost (severity) is incurred (paid plus reserve) divided by claim count. It covers auto claims in Georgia (GA) with a loss date from 2025-04-01 to 2025-06-30, which is Q2 2025. I counted claims by loss date. Payments come from the nightly batches only, which excludes the March 2026 reload that duplicated some rows.\",\"answer\":\"The average auto claim cost in Georgia for Q2 2025 was about $5,505. That is $418,347 of incurred cost across 76 claims. Q2 2025 is old enough that late reporting should not materially affect it. The duplicated payment rows from the March 2026 reload don't touch these claims, so the figure is the same with or without them.\",\"answer_sql\":\"with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) as claims, sum(coalesce(p.paid,0)+c.reserve_amount) as incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) as avg_claim_cost from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'\",\"findings\":[{\"claim\":\"Average incurred cost per GA auto claim with a Q2 2025 loss date is about $5,505 across 76 claims.\",\"evidence_sql\":\"with p as (select claim_id, sum(amount) paid from claim_payments where load_batch like 'nightly-%' group by 1) select count(*) n, sum(coalesce(p.paid,0)+c.reserve_amount) incurred, sum(coalesce(p.paid,0)+c.reserve_amount)/count(*) sev from claims c left join p using(claim_id) where c.product='auto' and c.state='GA' and c.loss_date>=DATE '2025-04-01' and c.loss_date<DATE '2025-07-01'\",\"key_numbers\":[{\"label\":\"claims\",\"value\":76,\"unit\":\"claims\"},{\"label\":\"incurred\",\"value\":418347.24,\"unit\":\"USD\"},{\"label\":\"average claim cost\",\"value\":5504.57,\"unit\":\"USD\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"claim_payments has 159 duplicate rows from the reload-2026-03-14 batch, which covers payments dated 2026-03-02 to 2026-03-13.\",\"impact\":\"None for this answer. No reload rows belong to GA auto claims with Q2 2025 loss dates, and the result is identical with or without them.\"}],\"charts\":[],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Remove duplicate payments from reload-2026-03-14\",\"reason\":\"159 payment rows are exact repeats of existing rows and will overstate paid and incurred in other cuts of the data.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

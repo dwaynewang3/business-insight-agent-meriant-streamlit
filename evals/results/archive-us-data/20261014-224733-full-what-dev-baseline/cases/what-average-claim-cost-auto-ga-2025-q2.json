@@ -1,0 +1,332 @@
+{
+  "case_id": "what-average-claim-cost-auto-ga-2025-q2",
+  "question": "What was the average claim cost for auto claims in Georgia in Q2 2025?",
+  "role": "claims_vp",
+  "grade": {
+    "passed": true,
+    "category": "pass",
+    "reason": "Matches the reference."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "what",
+    "interpretation": "Average claim cost (incurred = paid + open reserve, divided by claim count) for auto claims in Georgia, counted by loss date from 2025-04-01 to 2025-06-30. This uses the agreed average_claim_cost metric.",
+    "answer": "Auto claims in Georgia with a Q2 2025 loss date averaged about $5,505 each, across 76 claims. The duplicated payment rows loaded on 2026-03-14 don't touch these claims, so the figure is unaffected. Q2 2025 is old enough that late-reported claims are mostly in, but open claims' reserves can still change.",
+    "answer_sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'",
+    "findings": [
+      {
+        "claim": "Average incurred cost per GA auto claim with Q2 2025 loss date is about $5,505 (76 claims). Excluding the reload batch gives the same value.",
+        "evidence_sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT count(*) AS claims, sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'",
+        "key_numbers": [
+          {
+            "label": "Average claim cost",
+            "value": 5504.57,
+            "unit": "USD"
+          },
+          {
+            "label": "Claims",
+            "value": 76,
+            "unit": "claims"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [],
+    "data_quality_issues": [
+      {
+        "issue": "claim_payments has 159 duplicated rows from the reload-2026-03-14 batch (payments dated March 2026).",
+        "impact": "None for this answer. Excluding that batch gives the same average."
+      }
+    ],
+    "charts": [],
+    "proposed_actions": [],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.026629,
+  "seconds": 13.54,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "auto"
+            ]
+          },
+          {
+            "dimension": "state",
+            "values": [
+              "GA"
+            ]
+          }
+        ],
+        "grain": null,
+        "start": "2025-04-01",
+        "end": "2025-06-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-04-01'\n  AND loss_date <= DATE '2025-06-30'\n  AND product IN ('auto')\n  AND state IN ('GA')",
+      "rows": 1,
+      "truncated": false
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claim_payments"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT count(*) AS claims, sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'"
+      },
+      "source": "custom_query",
+      "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT count(*) AS claims, sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'",
+      "rows": 1,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-ae3c47c1e7af",
+      "run_id": "r-01ae2341428f",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 262,
+      "cache_read_input_tokens": 7895,
+      "cache_creation_input_tokens": 173,
+      "cost_usd": 0.00464,
+      "seconds": 3.16,
+      "request_id": "req_011Cg25o4be3QcoZcTfyLucx"
+    },
+    {
+      "session_id": "s-ae3c47c1e7af",
+      "run_id": "r-01ae2341428f",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 77,
+      "cache_read_input_tokens": 8068,
+      "cache_creation_input_tokens": 873,
+      "cost_usd": 0.00457,
+      "seconds": 1.83,
+      "request_id": "req_011Cg25oJDSyi22wvK3qG8zs"
+    },
+    {
+      "session_id": "s-ae3c47c1e7af",
+      "run_id": "r-01ae2341428f",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 289,
+      "cache_read_input_tokens": 8941,
+      "cache_creation_input_tokens": 657,
+      "cost_usd": 0.006325,
+      "seconds": 2.54,
+      "request_id": "req_011Cg25oSAvAESeSJ7xYcDrH"
+    },
+    {
+      "session_id": "s-ae3c47c1e7af",
+      "run_id": "r-01ae2341428f",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 832,
+      "cache_read_input_tokens": 9598,
+      "cache_creation_input_tokens": 340,
+      "cost_usd": 0.011094,
+      "seconds": 5.66,
+      "request_id": "req_011Cg25od9EbGjEJjaTFnraV"
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [],
+  "session_id": "s-ae3c47c1e7af",
+  "run_id": "r-01ae2341428f",
+  "numbers": {
+    "checked": 2,
+    "confirmed": 2,
+    "unconfirmed": []
+  },
+  "agent_version": "0.1.0+92df8670f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Claims VP. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "What was the average claim cost for auto claims in Georgia in Q2 2025?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01Fiui53cVbJgZ3ASFWtxbsP",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "auto"
+                ]
+              },
+              {
+                "dimension": "state",
+                "values": [
+                  "GA"
+                ]
+              }
+            ],
+            "grain": null,
+            "start": "2025-04-01",
+            "end": "2025-06-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_012aNVUzoPWPmXb9TAbA74jr",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Fiui53cVbJgZ3ASFWtxbsP",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"USD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-04-01'\\n  AND loss_date <= DATE '2025-06-30'\\n  AND product IN ('auto')\\n  AND state IN ('GA')\", \"columns\": [\"value\"], \"rows\": [[5504.568947368421]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012aNVUzoPWPmXb9TAbA74jr",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"USD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSngUKEAgSGAI4AUIIdGhpbmtpbmcSDIhoEk83tFpSODm71xoM2b2NKGjgiNFIDUB1IjCBJAzA8X21UMDH69FWgpCdWIIVtVp+Qd9/rIxjdMZuoL+Vp26F5x9U7QR70wuusjIquwR5MeWQW4+YuxIgiBDjOuOOIsciIHuH2qXM0HpfcDdb/nsMEYYxRix01cgAzyJO46bGjjYrYvbznQfKwtr3emeYa1qfX7UWPkP3ypUObmO7rMcEYtJ9scaHK89a5tA6RVZ4YNPDf+RNd3Ml68u7daG9zoXdIBK9ggYBxux75bnGexsEVJc0Dc0xTwOk34qQRPy7+nk3GSKdZ/OHtBe4HN/vRb5RDcQ7Takaux86SbOHFNI+Zhw5Aaes7qiC3P0rhN+4ezRRNxw7SHjNBefREue4rN/YBZkrP/vtPLkWHWte8FLtGpi3F7d28571pAcxPFPzK9db0yq4PPQ7IxcsW9SbndG/pLB8ejIozFQVb4qKVURJhRW/IW1TCQLc8kCdz0F9xzVk2XCddiK2c5xCpVHomlqD14OqVYHwzhHmYdPSZFIHCKngRVndzg3a+A9UcYnF9RJvewAuFOgyTQb6xF3vwsInMkRhVm0T43TfHdK6SntbAgsCxE4J6GuheEEv8mLHjN0AerlADT1zwXkZ0fAfL3RN+2hus1t702k16VHWupEI7qDjjMgABjVfjlYT08EtcboRpag+VvUh9ILUfkH62pQDyc3SdDF7+HmM11ql3oM+ojbvNozq/Ww/4lvqAIXraKvnY4Jsd4lRbLLlq/pZ/pyXJ7F8w3VH3Q9SR7NqRlN809d7J225TWO5IKPujT8b+OIQmJ5p7otUa3O8cTnWexQ4R5wVmOyVZ+yxoj6UqPwpEWRC0x0swAzCGAE=",
+          "thinking": "I should quickly check whether there are any duplicate entries in the payments data.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_011HGCKNaCpgcsJDAm9VM1mK",
+          "input": {
+            "table": "claim_payments"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_011HGCKNaCpgcsJDAm9VM1mK",
+          "content": "{\"table\": \"claim_payments\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"warning\", \"finding\": \"159 rows repeat another row exactly (ignoring payment_id and load_batch).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT claim_id, payment_date, amount, payee_type, count(*) - 1 AS extra FROM claim_payments GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"ok\", \"finding\": \"No empty values.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"322 values of amount are far above the rest (above 25,449; the largest is 237,119).\", \"sql\": \"WITH q AS (SELECT quantile_cont(amount, 0.25) AS q1, quantile_cont(amount, 0.75) AS q3 FROM claim_payments WHERE amount > 0) SELECT count(*) FILTER (WHERE amount > q3 + 3 * (q3 - q1)), max(amount), any_value(q3 + 3 * (q3 - q1)) FROM claim_payments, q\"}, {\"check\": \"load_batches\", \"status\": \"warning\", \"finding\": \"Payments loaded outside the nightly batches: reload-2026-03-14 (159 rows, payments 2026-03-02 to 2026-03-13).\", \"sql\": \"SELECT load_batch, count(*) AS rows, min(payment_date) AS first_payment, max(payment_date) AS last_payment FROM claim_payments WHERE load_batch NOT LIKE 'nightly-%' GROUP BY 1 ORDER BY 1\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQSuAYKEAgSGAI4AUIIdGhpbmtpbmcSDFB/6eQV+bYok3GxORoM+30OwZFpIFTkkFvHIjDSlXtSs9m5yjifPyazIOcbumBauzqTdt171EH/Ma5q/132z0aZVR60BN+V0RK4r2Eq1QWHjJ5pmzhFPoERNyMw72WGR/ORdNgRQ1rSvG+3zOHsbPgq9FCKhoUsa0ZlNAjWWQoxG6RL+TK6X0cL/Bb/e7+N3IBPZfYgUoSKdP3Bm1796Ic6Od8EIISItYOHTqNktGS87evNSgFUrb11DfDqyS9YvytgCb/ag3LZedw3S5w23PwzNH6b+ORP0ixSYfm8iYo7JqnTZmsMwmbmQwefQuHJv7dOFZTySKw9rb3ZIbQyuzTebZ33qPm0LFuUJk1xv1BXaviLlqiVmaJF6vo4LIqPSbfL6l223IETMQDo6GoIjuO8Wjb8FbZ2/VVIkae1/RA2af6VN6WGTsCbSrrOk97IEQD6H9U2KEAXBat4EcQFovmAe7AM149pBBJZ6UPHpw1xYYPazptll+QWNB81k7wjlDnI6hg3EO3kF6bFGkPln6F8uOUlsPJ0Bn2Mo6ydmDTebkwVuAvr7YkCLZ+dIh8fEDjgjomw/w+O0CwYE23p+hxXxuoLcWszq8L7+ghOUf8PiFkWP3FFrrfi6cmF6v09bqVmCOTrexK2dJaCFgkC+92X7Da8fZjyrBIhUNxWDLI/t9BbraYVO+ZyIRneUYk28UvFxaOpg+fg4h1Mh7eDMFSuzLjb2gW49afWxaQc6d058xjuyJPmBrbRXsMKvuQTomkuM8svI7gjS745YrghX4u7Qh3Ln3IBsjPFQqaog/ufN/QiD3TWT/CRJ5E160GZ4mDvBhd600S74xZ6Pj7Emkg2ouwXm/9qh2l7nth8OoO+DUTRtK55J9WBnslawZmk2T/ms/QqFU92wwTkTwdkbupSuCUy58qldwpIXFfB3GKDHha+zaF4UK8D0PGs3DoqM2H5xxQlpnPQy+kAOrgNeeu+rMSr/IPVa1xE0mbyRC21TN3xB/9BX9n8Hun+MUwyaPw73cRFYSVnrYH13kbQfItKGmY0n4Sb3cW5kJ6WG3evMkQtQhgB",
+          "thinking": "These duplicates seem to stem from the March 2026 reload, which could skew Q2 2025 claims if those payments landed there too. I should recompute while excluding the reload to verify.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01RQtnjTacmMNy6kFX93D8tF",
+          "input": {
+            "sql": "WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT count(*) AS claims, sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01RQtnjTacmMNy6kFX93D8tF",
+          "content": "{\"columns\": [\"claims\", \"avg_claim_cost\"], \"rows\": [[76, 5504.568947368421]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"what\",\"interpretation\":\"Average claim cost (incurred = paid + open reserve, divided by claim count) for auto claims in Georgia, counted by loss date from 2025-04-01 to 2025-06-30. This uses the agreed average_claim_cost metric.\",\"answer\":\"Auto claims in Georgia with a Q2 2025 loss date averaged about $5,505 each, across 76 claims. The duplicated payment rows loaded on 2026-03-14 don't touch these claims, so the figure is unaffected. Q2 2025 is old enough that late-reported claims are mostly in, but open claims' reserves can still change.\",\"answer_sql\":\"WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments GROUP BY 1) SELECT sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'\",\"findings\":[{\"claim\":\"Average incurred cost per GA auto claim with Q2 2025 loss date is about $5,505 (76 claims). Excluding the reload batch gives the same value.\",\"evidence_sql\":\"WITH pay AS (SELECT claim_id, sum(amount) paid FROM claim_payments WHERE load_batch NOT LIKE 'reload%' GROUP BY 1) SELECT count(*) AS claims, sum(coalesce(paid,0)+reserve_amount)/count(*) AS avg_claim_cost FROM claims c LEFT JOIN pay USING (claim_id) WHERE product='auto' AND state='GA' AND loss_date BETWEEN DATE '2025-04-01' AND DATE '2025-06-30'\",\"key_numbers\":[{\"label\":\"Average claim cost\",\"value\":5504.57,\"unit\":\"USD\"},{\"label\":\"Claims\",\"value\":76,\"unit\":\"claims\"}],\"confidence\":\"high\"}],\"hypotheses\":[],\"data_quality_issues\":[{\"issue\":\"claim_payments has 159 duplicated rows from the reload-2026-03-14 batch (payments dated March 2026).\",\"impact\":\"None for this answer. Excluding that batch gives the same average.\"}],\"charts\":[],\"proposed_actions\":[],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}
