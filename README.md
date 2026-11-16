@@ -1,5 +1,7 @@
 # Business Insights Agent
 
+> **This is the hosted copy.** It's [business-insights-agent](https://github.com/dwaynewang3/business-insights-agent) with the demo data already built and committed (`data/*.duckdb`), so a small host such as Streamlit Community Cloud can open the guided demo without building anything. Building the policy knowledge base needs about 5.5 GB of memory for a few seconds, more than such a host has. The code is the same; changes are made in the main repository and copied here.
+
 An AI agent that answers "what" and "why" questions about business data and backs every finding with the SQL that produced it. The demo customer is **Meridian General Insurance**, a fictional Australian motor and home insurer.
 
 > **Status:** feature-complete and evaluated on held-out test data ([final results](#final-results-held-out-test-data-2026-10-19)). The UI opens on a guided demo of eight saved answers, so it can be tried without an API key.
