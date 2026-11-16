@@ -1,6 +1,6 @@
 # Development Plan: Business Insights Agent
 
-> Status: Phases 0–7 complete (a guided demo in the UI replaced the demo video on 2026-11-10); Phase 8 (publishing): committed as a fresh history on the local branch `publish` on 2026-11-12; pushing it, going public and deploying wait for the go-ahead. The v1 scope was frozen on 2026-10-04 ([docs/scoping.md](../scoping.md)) and revised on 2026-10-16: the customer moves to the Australian market and policy compliance is added ([docs/meridian_design.md](../meridian_design.md)). · Created: 2026-10-03 · Revised: 2026-10-08, after a plan review (security, evals, order of work, budget)
+> Status: Phases 0–7 complete (a guided demo in the UI replaced the demo video on 2026-11-10); Phase 8 (publishing) complete on 2026-11-16: the repo is public, and the guided demo is hosted on Streamlit Community Cloud. The v1 scope was frozen on 2026-10-04 ([docs/scoping.md](../scoping.md)) and revised on 2026-10-16: the customer moves to the Australian market and policy compliance is added ([docs/meridian_design.md](../meridian_design.md)). · Created: 2026-10-03 · Revised: 2026-10-08, after a plan review (security, evals, order of work, budget)
 > Progress, decisions and blockers are tracked in [DEV_TRACKER.md](DEV_TRACKER.md). This file is the reference plan.
 
 ## 1. Summary
@@ -321,13 +321,13 @@ After each step, re-run the eval subset and note the change.
 - [x] Check for secrets and clean up (tracked files on 2026-10-25, the full git history on 2026-11-02: none found)
 - [x] Set up CI: lint and offline tests on every push. Live evals cost money, so they run only when triggered manually. (Written on 2026-10-09; it first runs once the repo is on GitHub. 2026-11-02: also builds the Docker image and checks the UI starts.)
 - [x] Review the finished project and apply the fixes (2026-11-10): README results and screenshot up top, a replay-only UI without a key, GitHub issues behind the approval step, feedback buttons, the Claude Code skill tried, `docs/decisions.md`, the plan and tracker moved to `docs/dev/`
-- [ ] Deploy the guided demo to Streamlit Community Cloud once the repo is public (`app/main.py`, Python 3.13, no secrets), and put its link in the README
+- [x] Deploy the guided demo to Streamlit Community Cloud (`app/main.py`, Python 3.13, no secrets), and put its link in the README (2026-11-16: live at https://business-insight-agent-meridian.streamlit.app/). 2026-11-16: it deploys from a separate repo, a copy of this one with the demo data already built and committed, because building the policy knowledge base on the host needs more memory than the free tier has
 - [x] Review the project before publishing and apply the fixes (2026-11-12): step-by-step demo setup, final per-question costs, stale documents, a Tracing and feedback section, `docs/evaluation.md`
-- [ ] Publish to GitHub, only after you've reviewed the detailed README:
+- [x] Publish to GitHub, only after you've reviewed the detailed README:
   - set the repo description and topics (done 2026-11-10, while private)
   - rename the repo to `business-insights-agent` (done 2026-11-12)
-  - push the fresh history (local branch `publish`) over `main` while the repo is private, so CI builds the new Docker image
-  - make the repo public (waits for your go-ahead)
+  - push the fresh history as `main` while the repo is private, so CI builds the new Docker image (done 2026-11-16, into a recreated repo instead of a force-push; CI passed)
+  - make the repo public (done 2026-11-16)
 
 **Total: about 21–25 focused days (rough), after adding Phases 4–6 on 2026-10-16. There's no fixed deadline.**
 

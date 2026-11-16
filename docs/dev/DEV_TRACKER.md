@@ -12,10 +12,11 @@
 | Target user / "customer" | Business users at Meridian General Insurance, a fictional Australian motor and home insurer (claims leaders, analysts, fraud team) |
 | Model / provider | Claude Sonnet 5.5 (`claude-sonnet-5-5`), Anthropic API |
 | Stack | Python 3.13, LangGraph + Anthropic SDK, MCP servers (FastMCP), DuckDB, Streamlit, Langfuse |
-| Repo URL | https://github.com/dwaynewang3/business-insights-agent (private until your go-ahead; renamed from Business-Insight-Agent on 2026-11-12) |
+| Repo URL | https://github.com/dwaynewang3/business-insights-agent (public since 2026-11-16; renamed from Business-Insight-Agent on 2026-11-12, deleted and recreated on 2026-11-16) |
+| Hosted demo | https://business-insight-agent-meridian.streamlit.app/ (the guided demo and the saved runs, no API key), deployed from [the hosted copy](https://github.com/dwaynewang3/business-insight-agent-meridian-streamlit) |
 | Demo deadline | None (no fixed date) |
 | Constraints | Total cost under A$50 for the whole project (from 2026-10-18; was USD 200); no real data or database, so data is synthetic or public |
-| Current phase | Phase 8: Ship (everything is built and committed as a fresh history on the local branch `publish`; pushing it, going public and deploying the demo wait for you) |
+| Current phase | Phase 8: Ship, complete on 2026-11-16: the repo is public, the guided demo is hosted, and the release is tagged v0.2.0 |
 
 ## What the Project Must Show
 
@@ -98,6 +99,9 @@ Phase checklists live only in [DEV_PLAN.md](DEV_PLAN.md) section 8, so there's o
 | Done | Write step-by-step demo setup in the README | Seven steps from installing the tools to stopping the demo, then live mode; followed in a fresh copy, where the demo was up 43 s after `make demo` |
 | Done | Review the project before publishing and apply the fixes | Per-question costs corrected, stale documents updated, a Tracing and feedback section, `docs/evaluation.md`, the 24 decisions still marked for review confirmed |
 | Done | Rename the repo and prepare a fresh git history | `business-insights-agent`; the finished project in 11 commits by area, under GitHub's no-reply address, on the local branch `publish`, ready to replace `main` |
+| Done | Push the fresh history to GitHub | Into a recreated private repo, as `main`; CI passed, including the first build of the Docker image with the policy knowledge base and the test data |
+| Done | Build the hosted copy and deploy it to Streamlit Community Cloud | A separate repo, `business-insight-agent-meridian-streamlit`: this repo's history plus one commit with the five data files (43 MB); live since 2026-11-16 |
+| Done | Publish: public repo, demo link, release | Both repos public; the README and the repo's website field link to the demo; secret scanning on; tagged v0.2.0 |
 
 ## Decision Log
 
@@ -212,12 +216,16 @@ Record each major choice so the README can explain the reasoning.
 | 2026-11-12 | The licence and the package name Lei Wang as the author | "The Business Insights Agent authors" | A visitor otherwise sees only the GitHub handle |
 | 2026-11-12 | The repo stays private for now, and the demo isn't deployed yet | Go public once CI passes | Your decision: you may still make changes |
 | 2026-11-12 | *For review:* the five early trial runs stay in `evals/results/`, against the review's suggestion to remove them | Remove them | They're the evidence for two decisions: the four runs of rejected requests behind inline citations, and the stopped run that showed the region names read two ways. Only 4 of the 424 entries in Saved runs come from them |
+| 2026-11-16 | Delete the GitHub repo and create it again for the fresh history | Force-push over `main` (the 2026-11-12 plan), then delete the old CI runs and ask GitHub Support to remove the old commits | A force-push leaves the earlier commits readable on GitHub by their IDs, and the Actions tab's 8 earlier CI runs linked to them. The repo had no issues, pull requests or releases to lose |
+| 2026-11-16 | The hosted demo deploys from a separate repo: a copy of this one with the demo data already built and committed. This repo's code stays as it is | Embed the clauses 4 to a model call instead of all 252 at once (0.4 GB instead of 5.5 GB, and the same clauses in the same order in 204 of 204 test searches) | Your decision: the demo shows the knowledge base the results were measured with, and no code changes. The cost is two repos to keep in step |
+| 2026-11-16 | Both repos are public, and the hosted demo is open to everyone | Stay private while changes may still come (2026-11-12) | Your decision |
 
 ## Blockers
 
 | Date raised | Blocker | Impact | Status | Resolution |
 | --- | --- | --- | --- | --- |
 | 2026-10-09 | Scoring the full 84-case "what" set costs about $2.40 (measured $0.029 a question), more than the $2 limit set for the unattended session | Phase 2's "done when" isn't fully met, so the current phase stays Phase 2 | Resolved 2026-10-14 | You approved the spend; the full run cost $2.35 (84/84 passed) |
+| 2026-11-16 | The first deployment to Streamlit Community Cloud showed "Error running app" after the first-visit data build. Building the policy knowledge base peaks at 5.5 GB of memory (measured here), and the free tier gives up to 2.7 GB; its log shows no other error | No hosted demo | Resolved 2026-11-16 | The hosted copy has the data already built, so the host builds nothing (see the Decision Log); deployed from it, the demo opened |
 
 ## Open Questions
 
@@ -230,6 +238,19 @@ Record each major choice so the README can explain the reasoning.
 ## Dev Log
 
 Newest entries first.
+
+### 2026-11-16
+- **Review before pushing:** the fresh history passed lint and all 659 tests in a fresh clone that followed CI's steps. It found one problem with the push plan: a force-push would have left the earlier commits readable on GitHub by their IDs, linked from the Actions tab's 8 earlier CI runs.
+- **The GitHub repo is recreated** (your decision; you deleted it): private, same name, description and 12 topics. The fresh history is its `main`, 14 commits, all under GitHub's no-reply address.
+- **CI passed on the new `main`**, both jobs. The Docker job built the image with the policy knowledge base and the test data for the first time and the UI answered its health check (3 min 53 s).
+- Local branches: `main` follows GitHub's; `publish` and `scope-review-fixes` are removed; the earlier commits stay only in the local branch `backup/history-before-2026-11-12`.
+- **The first Streamlit deployment failed** with "Error running app", right after the first-visit data build. The likely cause is memory: building the policy knowledge base peaks at 5.5 GB here, because all 252 clauses go to the embedding model in one call, and the free tier gives up to 2.7 GB. The knowledge base itself is a 2 MB file.
+- **A hosted copy is built** (your decision, over changing the build): the repo `business-insight-agent-meridian-streamlit` holds this repo's history plus one commit with the five data files, built by the unchanged code. Its knowledge base has the same vectors as the original, and with data building blocked the eight guided steps open with their tables, charts and clause text. 659 tests pass there.
+- The README's hosting paragraph now gives the memory the first-visit build needs, and says the Streamlit copy carries its data.
+- No paid API calls (ledger at $30.45 of $32).
+- **The hosted demo is live** at https://business-insight-agent-meridian.streamlit.app/, deployed from the hosted copy; a visitor who isn't signed in gets the app. That closes the memory blocker.
+- **Published** (your decision): both repos are public. The README links to the demo at the top and under Try the demo, the repo's website field points to it, secret scanning is on, and the release is tagged v0.2.0.
+- Phase 8 is complete. Still open, none of it blocking: the three undecided tracing ideas under Open Questions, and the one decision marked for review.
 
 ### 2026-11-12
 - **Step-by-step demo setup in the README:** seven steps from installing the tools to stopping the demo, then five for live mode. Followed in a fresh copy with no data and no keys: the demo was up 43 s after `make demo` (packages and the embedding model were already downloaded on this machine).
