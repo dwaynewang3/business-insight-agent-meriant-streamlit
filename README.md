@@ -4,6 +4,8 @@ An AI agent that answers "what" and "why" questions about business data and back
 
 > **Status:** feature-complete and evaluated on held-out test data ([final results](#final-results-held-out-test-data-2026-10-19)). The UI opens on a guided demo of eight saved answers, so it can be tried without an API key.
 
+**Live demo:** [business-insight-agent-meridian.streamlit.app](https://business-insight-agent-meridian.streamlit.app/), the guided demo and the saved runs, with no account or API key. It sleeps when nobody has visited for a while, so it can take a moment to wake.
+
 ![The agent's answer to "Why did the average claim cost in New South Wales jump in July 2026?": the cause with its numbers, the explanations it tested and ruled out, and two data-quality warnings](docs/images/why-answer.png)
 
 ## The problem
@@ -90,7 +92,7 @@ The agent runs on Claude Sonnet 5.5 at medium effort. That was a decision made o
 
 ## Try the demo
 
-The guided demo runs on your own computer. It needs no API key and no account, and it costs nothing. Setting it up takes a few minutes, most of it downloads.
+The quickest way is the [hosted demo](https://business-insight-agent-meridian.streamlit.app/), which needs nothing installed. The steps below run the same guided demo on your own computer. It needs no API key and no account, and it costs nothing. Setting it up takes a few minutes, most of it downloads.
 
 **1. Install the tools.** You need `git`, `make` and [uv](https://docs.astral.sh/uv/). On macOS, `git` and `make` come with Apple's command line tools (`xcode-select --install`); most Linux systems have both. To install uv, run this and then open a new terminal window:
 
@@ -164,7 +166,7 @@ Every answer shows where its numbers came from, in three layers:
 
 There's also a [Dockerfile](Dockerfile) for running the same UI in a container (`docker build -t business-insights-agent .`, then `docker run -p 8501:8501 business-insights-agent`). The image builds the warehouse, the held-out test data and the policy knowledge base, so a container started without an API key is the complete guided demo. CI builds the image on every push and checks that the UI starts.
 
-**Hosting it.** Without an API key the app is the guided demo and the saved runs only, so visitors can't call Claude or cost anything. A host that runs a Dockerfile can use the image. A host that only runs the app, such as Streamlit Community Cloud, works too: point it at `app/main.py` and choose Python 3.13 in its advanced settings (it can't be changed after deploying), and set no secrets. The app builds its data on the first visit, which takes a minute or two.
+**Hosting it.** Without an API key the app is the guided demo and the saved runs only, so visitors can't call Claude or cost anything. A host that runs a Dockerfile can use the image. A host that only runs the app can start from the code alone: the app builds its data on the first visit, which takes a minute or two and needs about 5.5 GB of memory for a few seconds, while the policy knowledge base is embedded. Streamlit Community Cloud's free tier has less than that, so [the copy deployed there](https://github.com/dwaynewang3/business-insight-agent-meridian-streamlit) has the data files already built and committed: point it at `app/main.py`, choose Python 3.13 in its advanced settings (it can't be changed after deploying), and set no secrets.
 
 ## Setup for development
 
