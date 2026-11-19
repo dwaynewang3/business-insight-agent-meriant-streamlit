@@ -83,13 +83,80 @@ def test_a_missing_report_has_nothing_to_check(checker):
 
 
 def test_the_exact_value_behind_a_rounded_number_is_found_in_its_scale():
-    rows = [("motor", 0.536245, 1287), ("home", 0.597917, 783)]
-    assert source_value(53.6, "%", rows) == pytest.approx(53.6245)
-    assert source_value(2070, "claims", rows) == 2070  # a column total
-    assert source_value(1287, "claims", rows) == 1287
-    assert source_value(77.7, "%", rows) is None
-    assert source_value("n/a", "%", rows) is None
+    result = (["product", "loss_ratio", "claims"],
+              [("motor", 0.536245, 1287), ("home", 0.597917, 783)])
+
+    def exact(value, unit, column=None, row=()):
+        number = {"value": value, "unit": unit}
+        if column:
+            number |= {"column": column, "row": "; ".join(f"{c} = {v}" for c, v in row)}
+        return source_value(number, result)
+
+    assert exact(53.6, "%", "loss_ratio", [("product", "motor")]) == pytest.approx(53.6245)
+    assert exact(2070, "claims", "claims") == 2070  # a column total
+    assert exact(1287, "claims", "claims", [("product", "motor")]) == 1287
+    assert exact(783, "claims", "claims", [("product", "motor")]) is None  # home's count
+    assert exact(77.7, "%", "loss_ratio") is None
+    assert exact("n/a", "%") is None
+    # Reports from before numbers named their cell: anywhere in the result.
+    assert exact(53.6, "%") == pytest.approx(53.6245) and exact(783, "claims") == 783
     assert is_rounded(53.6, 53.6245) and not is_rounded(1287, 1287.0)
+
+
+def bound(value: float, unit: str, column: str, **row: str) -> dict:
+    return {"label": "n", "value": value, "unit": unit, "column": column,
+            "row": "; ".join(f"{c} = {v}" for c, v in row.items())}
+
+
+BY_CHANNEL = (["channel", "month", "claims"],
+              [("broker", "2026-01-01", 300), ("broker", "2026-02-01", 338),
+               ("direct", "2026-01-01", 230), ("direct", "2026-02-01", 250)])
+
+
+@pytest.mark.parametrize("number, confirmed", [
+    (bound(300, "claims", "claims", channel="broker", month="2026-01"), True),  # month given
+    (bound(338, "claims", "CLAIMS", channel="Broker", month="2026-02-01"), True),  # any case
+    (bound(230, "claims", "claims", channel="broker", month="2026-01"), False),  # direct's
+    (bound(638, "claims", "claims", channel="broker"), True),  # the rows it picks: total
+    (bound(319, "claims", "claims", channel="broker"), True),  # ... or average
+    (bound(1118, "claims", "claims"), True),  # no row: the column's total
+    (bound(480, "claims", "claims", channel="direct"), True),
+    (bound(480, "claims", "claims", channel="broker"), False),  # direct's total on broker
+])
+def test_a_number_is_checked_against_the_cell_it_names(number, confirmed):
+    from agent.key_numbers import cell_values
+
+    cells, problem = cell_values(number, BY_CHANNEL)
+    assert problem is None
+    assert any(matches(number["value"], cell, number["unit"]) for cell in cells) == confirmed
+
+
+@pytest.mark.parametrize("number, reason", [
+    (bound(300, "claims", "count"), "Its column, 'count', isn't in the result"),
+    (bound(300, "claims", "claims", region="NSW"), "Its row names a column, 'region'"),
+    (bound(300, "claims", "claims", channel="online"), "No row in the result has channel = online"),
+    (bound(300, "claims", "channel", channel="broker", month="2026-01"), "Its cell in 'channel'"),
+    ({"value": 300, "unit": "claims", "column": "claims", "row": "broker, January"},
+     "Its row, 'broker, January', isn't written as column = value pairs"),
+])
+def test_a_cell_that_cant_be_found_says_why(number, reason):
+    from agent.key_numbers import cell_values
+
+    cells, problem = cell_values(number, BY_CHANNEL)
+    assert cells == [] and problem.startswith(reason)
+
+
+def test_numbers_that_name_their_cell_are_checked_there(checker, dev):
+    by_product = dict(dev.execute("SELECT product, count(*) FROM claims GROUP BY 1").fetchall())
+    sql = "SELECT product, count(*) AS claims FROM claims GROUP BY 1"
+    report = {"findings": [{"claim": "c", "evidence_sql": sql, "confidence": "high",
+                            "key_numbers": [
+                                bound(by_product["motor"], "claims", "claims", product="motor"),
+                                bound(by_product["motor"], "claims", "claims", product="home")]}]}
+    result = checker.check(report)
+    assert (result["checked"], result["confirmed"]) == (2, 1)
+    assert result["unconfirmed"][0]["reason"] == (
+        "Not the value in its cell of its finding's SQL result.")
 
 
 def test_citations_are_read_from_the_text_and_checked_against_tool_results():

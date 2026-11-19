@@ -30,6 +30,11 @@ def ledger(tmp_path, monkeypatch):
     return path
 
 
+# One-row queries that read a table: a query that reads none is a placeholder, and isn't run.
+X_SQL = "SELECT 1 AS x FROM warehouse_info"
+N_SQL = "SELECT 7 AS n FROM warehouse_info"
+
+
 def session(warehouse, tmp_path, fake, role="head_of_claims", limits=None,
             toolset="full") -> Session:
     config = AgentConfig(warehouse=warehouse, limits=limits or Limits(), toolset=toolset,
@@ -95,7 +100,7 @@ def test_role_and_extract_date_go_in_the_first_message_not_the_system_prompt(war
 
 def test_follow_ups_extend_the_same_conversation_without_editing_it(warehouse, tmp_path):
     fake = FakeClaude(
-        reply(thinking(), sql_call("SELECT 1 AS x"), stop_reason="tool_use"),
+        reply(thinking(), sql_call(X_SQL), stop_reason="tool_use"),
         reply(thinking(), report()),
         reply(report()),
     )
@@ -128,8 +133,8 @@ def test_a_rejected_query_goes_back_to_the_model_as_an_error(warehouse, tmp_path
 
 def test_the_model_is_asked_to_report_once_the_query_budget_is_used(warehouse, tmp_path):
     fake = FakeClaude(
-        reply(sql_call("SELECT 1 AS x"), stop_reason="tool_use"),
-        reply(sql_call("SELECT 2 AS x", "tu_2"), stop_reason="tool_use"),
+        reply(sql_call(X_SQL), stop_reason="tool_use"),
+        reply(sql_call("SELECT 2 AS x FROM warehouse_info", "tu_2"), stop_reason="tool_use"),
         reply(report()),
     )
     limits = Limits(max_tool_calls=2, hard_tool_calls=4)
@@ -144,8 +149,8 @@ def test_the_model_is_asked_to_report_once_the_query_budget_is_used(warehouse, t
 
 def test_a_question_stops_at_the_hard_query_cap_and_follow_ups_still_work(warehouse, tmp_path):
     fake = FakeClaude(
-        reply(sql_call("SELECT 1 AS x"), stop_reason="tool_use"),
-        reply(sql_call("SELECT 2 AS x", "tu_2"), stop_reason="tool_use"),
+        reply(sql_call(X_SQL), stop_reason="tool_use"),
+        reply(sql_call("SELECT 2 AS x FROM warehouse_info", "tu_2"), stop_reason="tool_use"),
         reply(report()),
     )
     chat = session(warehouse, tmp_path, fake, limits=Limits(max_tool_calls=1, hard_tool_calls=1))
@@ -184,7 +189,7 @@ def test_no_call_is_made_once_the_spend_limit_is_reached(warehouse, tmp_path, le
 
 def test_a_question_stops_at_its_cost_cap(warehouse, tmp_path):
     expensive = {"input_tokens": 100_000, "output_tokens": 0}  # $0.20 a call
-    fake = FakeClaude(*[reply(sql_call("SELECT 1 AS x", f"tu_{i}"), stop_reason="tool_use",
+    fake = FakeClaude(*[reply(sql_call(X_SQL, f"tu_{i}"), stop_reason="tool_use",
                               usage=expensive) for i in range(5)])
     answer = session(warehouse, tmp_path, fake, limits=Limits(max_cost_usd=0.5)).ask("Question")
     assert "cost cap" in answer.error
@@ -192,7 +197,7 @@ def test_a_question_stops_at_its_cost_cap(warehouse, tmp_path):
 
 
 def test_every_call_is_recorded_in_the_spend_ledger_and_the_trace(warehouse, tmp_path, ledger):
-    fake = FakeClaude(reply(sql_call("SELECT 1 AS x"), stop_reason="tool_use"), reply(report()))
+    fake = FakeClaude(reply(sql_call(X_SQL), stop_reason="tool_use"), reply(report()))
     chat = session(warehouse, tmp_path, fake)
     answer = chat.ask("Question")
 
@@ -235,7 +240,7 @@ def test_parse_report_rejects_a_missing_or_partial_report():
 
 
 def test_progress_events_reach_a_listener_while_the_question_runs(warehouse, tmp_path):
-    fake = FakeClaude(reply(sql_call("SELECT 1 AS x"), stop_reason="tool_use"), reply(report()))
+    fake = FakeClaude(reply(sql_call(X_SQL), stop_reason="tool_use"), reply(report()))
     seen = []
     chat = session(warehouse, tmp_path, fake)
     chat.ask("Question", on_event=lambda event: seen.append(event["event"]))
@@ -279,32 +284,101 @@ def report_with_numbers(sql: str, *values: float) -> dict:
 
 
 def test_confirmed_key_numbers_go_out_without_another_call(warehouse, tmp_path):
-    fake = FakeClaude(reply(report_with_numbers("SELECT 7 AS n", 7)))
+    fake = FakeClaude(reply(report_with_numbers(N_SQL, 7)))
     answer = session(warehouse, tmp_path, fake).ask("Question")
     assert len(fake.requests) == 1
     assert answer.numbers == {"checked": 1, "confirmed": 1, "unconfirmed": []}
 
 
 def test_unconfirmed_key_numbers_go_back_to_the_model_once(warehouse, tmp_path):
-    fake = FakeClaude(reply(report_with_numbers("SELECT 7 AS n", 7, 9)),
-                      reply(report_with_numbers("SELECT 7 AS n, 9 AS m", 7, 9)))
+    fake = FakeClaude(reply(report_with_numbers(N_SQL, 7, 9)),
+                      reply(report_with_numbers("SELECT 7 AS n, 9 AS m FROM warehouse_info", 7, 9)))
     answer = session(warehouse, tmp_path, fake).ask("Question")
 
     request = fake.requests[1]["messages"][-1]
     assert request["role"] == "user" and "Finding 1, n1: 9 claims" in request["content"][0]["text"]
-    assert answer.report["findings"][0]["evidence_sql"] == "SELECT 7 AS n, 9 AS m"
+    assert (answer.report["findings"][0]["evidence_sql"]
+            == "SELECT 7 AS n, 9 AS m FROM warehouse_info")
     assert answer.numbers["confirmed"] == 2 and answer.error is None
 
 
+def test_a_repeated_identical_call_isnt_run_again(warehouse, tmp_path):
+    sql = "SELECT count(*) AS claims FROM claims"
+    fake = FakeClaude(*[reply(sql_call(query, f"tu_{n}"), stop_reason="tool_use")
+                        for n, query in enumerate((sql, sql, sql + " WHERE 1 = 1"), 1)],
+                      reply(report()))
+    answer = session(warehouse, tmp_path, fake).ask("Question")
+
+    first = fake.requests[1]["messages"][-1]["content"][0]["content"]
+    repeated = fake.requests[2]["messages"][-1]["content"][0]
+    # The earlier result comes back, with a note, instead of running the query again.
+    assert repeated["tool_use_id"] == "tu_2" and repeated["content"].endswith(first)
+    assert repeated["content"].startswith("This exact call already ran")
+    assert not repeated["is_error"]
+    assert [c.get("repeat", False) for c in answer.tool_calls] == [False, True, False]
+    assert "rows" in answer.tool_calls[2]  # a different query still runs
+
+
+def test_a_call_repeated_in_the_same_turn_gets_the_first_ones_result(warehouse, tmp_path):
+    sql = "SELECT count(*) AS claims FROM claims"
+    fake = FakeClaude(reply(sql_call(sql, "tu_1"), sql_call(sql, "tu_2"), stop_reason="tool_use"),
+                      reply(report()))
+    answer = session(warehouse, tmp_path, fake).ask("Question")
+    first, second = fake.requests[1]["messages"][-1]["content"]
+    assert second["content"].endswith(first["content"]) and second["tool_use_id"] == "tu_2"
+    assert [c.get("repeat", False) for c in answer.tool_calls] == [False, True]
+
+
+def test_a_placeholder_query_isnt_run_and_says_why(warehouse, tmp_path):
+    fake = FakeClaude(reply(sql_call("SELECT 1 AS placeholder WHERE false"),
+                            stop_reason="tool_use"), reply(report()))
+    answer = session(warehouse, tmp_path, fake).ask("What does the policy say?")
+    result = fake.requests[1]["messages"][-1]["content"][0]
+    assert result["is_error"] and result["content"].startswith("Not run: this query reads no")
+    assert "rows" not in answer.tool_calls[0] and answer.tool_calls[0]["error"]
+
+
+def test_after_three_repeats_the_model_is_asked_to_write_its_report(warehouse, tmp_path):
+    sql = "SELECT count(*) AS claims FROM claims"
+    fake = FakeClaude(*[reply(sql_call(sql, f"tu_{n}"), stop_reason="tool_use") for n in range(4)],
+                      reply(report()))
+    session(warehouse, tmp_path, fake).ask("Question")
+    nudges = [block["text"] for request in fake.requests[1:]
+              for block in request["messages"][-1]["content"] if block.get("type") == "text"]
+    assert nudges == ["You've asked again for results you already have. Write the report now "
+                      "with what you have."]  # after the third repeat, not before
+
+
+def test_a_number_backed_by_a_query_that_reads_no_table_isnt_confirmed(warehouse, tmp_path):
+    fake = FakeClaude(*[reply(report_with_numbers("SELECT 638 AS claims", 638)) for _ in range(2)])
+    answer = session(warehouse, tmp_path, fake).ask("Question")
+    assert answer.numbers["unconfirmed"][0]["reason"].startswith("Its SQL reads no warehouse")
+
+
+def test_a_real_number_on_the_wrong_row_goes_back_to_the_model(warehouse, tmp_path):
+    sql = ("SELECT 'broker' AS channel, 638 AS claims FROM warehouse_info "
+           "UNION ALL SELECT 'direct', 480 FROM warehouse_info")
+    body = json.loads(report_with_numbers(sql)["text"])
+    # 480 is in the result, but it's direct's count, not broker's.
+    body["findings"][0]["key_numbers"] = [{
+        "label": "broker", "value": 480, "unit": "claims", "column": "claims",
+        "row": "channel = broker"}]
+    fake = FakeClaude(*[reply({"type": "text", "text": json.dumps(body)}) for _ in range(2)])
+    answer = session(warehouse, tmp_path, fake).ask("Question")
+    assert len(fake.requests) == 2
+    assert answer.numbers["unconfirmed"][0]["reason"] == (
+        "Not the value in its cell of its finding's SQL result.")
+
+
 def test_numbers_still_unconfirmed_after_the_repair_are_reported_not_retried(warehouse, tmp_path):
-    fake = FakeClaude(*[reply(report_with_numbers("SELECT 7 AS n", 7, 9)) for _ in range(2)])
+    fake = FakeClaude(*[reply(report_with_numbers(N_SQL, 7, 9)) for _ in range(2)])
     answer = session(warehouse, tmp_path, fake).ask("Question")
     assert len(fake.requests) == 2
     assert [n["label"] for n in answer.numbers["unconfirmed"]] == ["n1"]
 
 
 def test_a_failed_repair_keeps_the_checked_report(warehouse, tmp_path):
-    fake = FakeClaude(reply(report_with_numbers("SELECT 7 AS n", 9)), reply(stop_reason="refusal"))
+    fake = FakeClaude(reply(report_with_numbers(N_SQL, 9)), reply(stop_reason="refusal"))
     answer = session(warehouse, tmp_path, fake).ask("Question")
     assert answer.error is None and answer.report["findings"][0]["key_numbers"][0]["value"] == 9
     assert answer.numbers["unconfirmed"][0]["reason"] == "Not in the result of its finding's SQL."

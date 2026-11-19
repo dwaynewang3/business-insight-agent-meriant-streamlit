@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent.citations import is_returned, returned_clauses
-from agent.key_numbers import as_number, is_rounded, scaled_match, source_value
+from agent.key_numbers import Result, as_number, is_rounded, scaled_match, source_value
 from app.guide import GUIDE
 from mcp_servers.warehouse.access import restricted_path
 
@@ -116,19 +116,20 @@ def exact_text(value: float) -> str:
     return f"{value:,.{decimals}f}".rstrip("0").rstrip(".")
 
 
-def key_number_html(number: dict, rows: list | None) -> str:
+def key_number_html(number: dict, result: Result | None) -> str:
     """A key number as written, marked "rounded" with the exact value on hover when it's a
-    rounding of a value in its finding's query result, and "not confirmed" when the result
-    doesn't contain it. With rows None (the query wasn't re-run, or failed), it's shown as
+    rounding of its cell in its finding's query result, and "not confirmed" when that cell
+    doesn't hold it. With result None (the query wasn't re-run, or failed), it's shown as
     written. For markdown that allows HTML."""
     shown = markdown_text(f"{number['label']}: {number['value']:,} {number['unit']}",
                           html_too=True)
-    if rows is None:
+    if result is None:
         return shown
-    exact = source_value(number["value"], number["unit"], rows)
+    exact = source_value(number, result)
     if exact is None:
-        return (f'{shown} <abbr title="Not found in the result of this finding\'s query, so '
-                f'it can\'t be traced to the SQL shown">(not confirmed)</abbr>')
+        return (f'{shown} <abbr title="Not found in its place in the result of this '
+                f'finding\'s query, so it can\'t be traced to the SQL shown">(not confirmed)'
+                f'</abbr>')
     if not is_rounded(float(number["value"]), exact):
         return shown
     return (f'{shown} <abbr title="Rounded. Exact value from the query: '
@@ -219,6 +220,8 @@ def step_label(event: dict) -> str | None:
             text = f"Reviewing {detail.get('claim_id', 'a claim')} against the policies"
         else:
             text = f"Calling {tool}"
+        if event.get("repeat"):
+            return f"{text} again: the same call already ran, so it wasn't repeated"
         if "error" in event:
             return f"{text}: failed, so the agent will adjust"
         rows = event.get("rows")

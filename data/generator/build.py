@@ -11,18 +11,20 @@ from data.compliance.build import add_claim_files
 from mcp_servers.warehouse.access import restricted_path
 
 from .checks import measure
-from .claims import ClaimFactory, assign_ids, generate_claims
+from .claims import ClaimFactory, add_contact_details, assign_ids, generate_claims
 from .config import Scenario
 from .entities import make_adjusters, make_policies, make_repair_shops
 from .exposure import compute_exposure
 from .incidents import (
     apply_staff_departures,
     channel_growth_evidence,
+    cost_shifts,
     duplicate_payments,
     early_claims,
     inject_notes,
     partner_business,
     reassign_departed_claims,
+    recode_causes,
     shop_steering,
     weather_events,
 )
@@ -78,8 +80,11 @@ def generate(scenario: Scenario, out_path: str | Path) -> dict:
     payments += fraud_payments
     evidence |= fraud_evidence
     reassign_departed_claims(claims, adjusters, rng)
+    evidence |= cost_shifts(scenario, claims, payments)
     evidence |= duplicate_payments(scenario, payments)
     assign_ids(claims, payments)
+    evidence |= recode_causes(scenario, claims)
+    add_contact_details(scenario, claims, policies, holders)
     evidence |= inject_notes(scenario, claims, steering, rng)
 
     tables = {

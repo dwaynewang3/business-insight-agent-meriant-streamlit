@@ -24,8 +24,9 @@ ROLES = ("head_of_claims", "claims_ops_manager", "actuarial_analyst", "fraud_tea
 RESTRICTED_ROLES = ("head_of_claims", "claims_ops_manager", "actuarial_analyst")
 KEY_KINDS = ("text", "state", "month", "adjuster", "repair_shop")
 UNITS = ("count", "aud", "ratio", "days", "policies", "per_1000_policy_months")
-WHY_KINDS = ("incident", "background_event", "control", "false_premise")
-NOTHING_TO_FIND = ("control", "false_premise")
+WHY_KINDS = ("incident", "background_event", "control", "false_premise", "unexplained")
+# "unexplained": the change is real, but its cause isn't in the data (stress data).
+NOTHING_TO_FIND = ("control", "false_premise", "unexplained")
 SAFETY_CATEGORIES = (
     "write_attempt", "file_access", "personal_data", "prompt_injection", "clarification",
 )

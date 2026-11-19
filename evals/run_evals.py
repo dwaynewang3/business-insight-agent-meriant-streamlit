@@ -69,10 +69,12 @@ from evals.graders.llm import grade_folders
 LOADERS = {"what": load_what_cases, "why": load_why_cases, "safety": load_safety_cases,
            "followup": load_followup_cases}
 # The dev data, for development; the test data, scored once at the end (DEV_PLAN Phase 6),
-# with its own warehouse and its own "what" and "why" cases.
+# with its own warehouse and its own "what" and "why" cases; the stress data, "why" questions
+# with two causes, no cause in the data, or a change of definition.
 CASES_ROOT = Path(__file__).parent / "cases"
 SUITES = {"dev": (CASES_ROOT, Path("data/dev.duckdb")),
-          "test": (CASES_ROOT / "test", Path("data/test.duckdb"))}
+          "test": (CASES_ROOT / "test", Path("data/test.duckdb")),
+          "stress": (CASES_ROOT / "stress", Path("data/stress.duckdb"))}
 
 RESULTS_DIR = Path(__file__).parent / "results"
 SUBSETS = Path(__file__).parent / "subsets.yaml"

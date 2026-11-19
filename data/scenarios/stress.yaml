@@ -1,0 +1,97 @@
+# Stress data: "why" questions harder than the dev and test data's, where most cases have one
+# clean cause. Built on 2026-11-17, after the project was published. Its own warehouse
+# (data/stress.duckdb), so the dev data, the saved runs and the hosted demo don't change.
+#
+# - Two causes at once: a hailstorm and a duplicate payment load in the same weeks.
+# - A real rise whose cause isn't in the data: the right answer says the data can't tell.
+# - A change of definition: the claims system starts recording part of "storm" as "hail".
+name: stress
+seed: 20261117
+start_date: 2025-01-01
+end_date: 2026-09-30
+as_of: 2026-09-30 # extract date: claims reported after this aren't in the data yet
+
+regions:
+  NSW & ACT: [NSW, ACT]
+  VIC & TAS: [VIC, TAS]
+  QLD & NT: [QLD, NT]
+  West & South: [WA, SA]
+
+policies:
+  initial_count: 50000
+  monthly_new_business_rate: 0.012
+  annual_lapse_rate: 0.13
+  product_mix: {motor: 0.62, home: 0.38}
+  state_weights: {NSW: 0.30, VIC: 0.25, QLD: 0.21, WA: 0.11, SA: 0.07, TAS: 0.02, ACT: 0.02, NT: 0.02}
+  channels: {broker: 0.45, direct: 0.3, online: 0.25}
+
+adjusters_per_region: {NSW & ACT: 9, VIC & TAS: 8, QLD & NT: 7, West & South: 6}
+repair_shops_per_state: 6
+
+incidents:
+  # Two causes behind one jump: Victoria's payments in May rose because of claims from a
+  # late-April hailstorm (real cost) and because payments from 11-22 May were loaded twice
+  # (not real). An answer that names only one of them is incomplete.
+  - id: melbourne_hailstorm
+    number: "1"
+    type: weather_event
+    state: VIC
+    area: Melbourne
+    event_type: hailstorm
+    start_date: 2026-04-27
+    end_date: 2026-04-28
+    severity: severe
+    cost_factor: 1.4
+    extra_claims: {motor: {storm: 110}, home: {storm: 80}}
+    explanation: >-
+      A severe hailstorm hit Melbourne on 27-28 April 2026 (see weather_events), adding about
+      190 storm claims whose payments fell mostly in May.
+
+  - id: duplicate_payment_load
+    number: "2"
+    type: duplicate_payments
+    start_date: 2026-05-11
+    end_date: 2026-05-22
+    reload_batch: reload-2026-05-23
+    reload_date: 2026-05-23
+    explanation: >-
+      Payments dated 11-22 May 2026 were loaded twice. The batch "reload-2026-05-23" copied
+      them with new payment IDs, so paid amounts for those days doubled in every state. It's a
+      data pipeline bug, not real cost.
+
+  # A real rise with no cause in the data: New South Wales motor claims cost more from June
+  # to August 2026, spread evenly across causes, repair shops, adjusters and channels, with
+  # no weather event and no data problem behind it.
+  - id: nsw_motor_cost_rise
+    number: "3"
+    type: unexplained_cost_shift
+    state: NSW
+    product: motor
+    start_date: 2026-06-01
+    end_date: 2026-08-31
+    cost_factor: 1.4
+    explanation: >-
+      The rise is real: New South Wales motor claims from June to August 2026 cost about 40%
+      more than a year earlier, while claim numbers and other states' costs didn't change. It
+      isn't a data problem, a change in the mix of causes, seasonality, a weather event, or
+      one repair shop, adjuster or sales channel: the rise shows evenly across all of them.
+      The warehouse doesn't hold the cause, so the right answer says the data can't establish
+      it, and names what to check outside the data (for example parts and labour prices, or
+      a change in how claims are assessed).
+
+  # A change of definition: from July 2026 the claims system records part of home "storm"
+  # damage under a new cause, "hail". Storm claims seem to halve; storm and hail together
+  # are in line with a year earlier.
+  - id: storm_hail_recode
+    number: "4"
+    type: cause_recode
+    product: home
+    from_cause: storm
+    to_cause: hail
+    start_date: 2026-07-01
+    compare_until: 2026-08-31
+    explanation: >-
+      Home storm claims didn't really fall. From 1 July 2026 the claims system records part of
+      storm damage under a new cause, "hail", which didn't exist before. Storm and hail claims
+      together in July and August 2026 are in line with storm claims a year earlier, so the
+      drop is a change in how claims are coded, not in the risk.

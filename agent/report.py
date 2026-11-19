@@ -2,7 +2,11 @@
 
 It's a structured output, so the UI and the eval graders read the same fields. Structured
 outputs need `additionalProperties: false` and fixed keys on every object, which is why
-`key_numbers` is a list of label, value and unit rather than a free-form object.
+`key_numbers` is a list of label, value and unit rather than a free-form object. Each key
+number also names the cell of its finding's result it comes from, so code can check it against
+that cell (agent/key_numbers.py). Its row is one string, "state = NSW; month = 2026-07": as a
+list of column and value objects, it made the request's strict schemas too large for the API
+to compile (tested 2026-11-17), as the `citations` field once did.
 """
 
 import json
@@ -39,6 +43,8 @@ REPORT_SCHEMA = _object({
             "label": STRING,
             "value": {"type": "number"},
             "unit": STRING,
+            "column": STRING,  # the result column the number comes from
+            "row": STRING,  # picks out its row: "state = NSW; month = 2026-07", or empty
         })),
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
     })),

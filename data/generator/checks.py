@@ -295,7 +295,61 @@ def _early_claims(con, scenario: Scenario, spec: dict, evidence: dict) -> dict:
           "since_months": since_months})
 
 
+def _cost_shift(con, scenario: Scenario, spec: dict, evidence: dict) -> dict:
+    """Average incurred cost in the shift's period against the same months a year earlier,
+    for the shifted state and for every other state, and the claim counts (which don't move)."""
+    year_before = {"start": spec["start_date"].replace(year=spec["start_date"].year - 1),
+                   "end": spec["end_date"].replace(year=spec["end_date"].year - 1)}
+    return _row(con, f"""
+        WITH {CLAIM_COSTS}
+        SELECT
+            avg(incurred) FILTER (WHERE state = $state AND loss_date BETWEEN $start AND $end)
+                AS avg_cost,
+            avg(incurred) FILTER (WHERE state = $state
+                                  AND loss_date BETWEEN $start_before AND $end_before)
+                AS avg_cost_year_before,
+            avg(incurred) FILTER (WHERE state <> $state AND loss_date BETWEEN $start AND $end)
+                AS other_states_avg_cost,
+            avg(incurred) FILTER (WHERE state <> $state
+                                  AND loss_date BETWEEN $start_before AND $end_before)
+                AS other_states_avg_cost_year_before,
+            count(*) FILTER (WHERE state = $state AND loss_date BETWEEN $start AND $end)
+                AS claims,
+            count(*) FILTER (WHERE state = $state
+                             AND loss_date BETWEEN $start_before AND $end_before)
+                AS claims_year_before
+        FROM claim_costs
+        WHERE product = $product
+    """, {"state": spec["state"], "product": spec["product"], "start": spec["start_date"],
+          "end": spec["end_date"], "start_before": year_before["start"],
+          "end_before": year_before["end"]})
+
+
+def _cause_recode(con, scenario: Scenario, spec: dict, evidence: dict) -> dict:
+    """Claims of the old code, and of both codes together, reported in the months after the
+    change and in the same months a year earlier."""
+    start = spec["start_date"]
+    end = spec["compare_until"]
+    return _row(con, """
+        SELECT
+            count(*) FILTER (WHERE cause = $old AND report_date BETWEEN $start AND $end)
+                AS old_code_claims,
+            count(*) FILTER (WHERE cause = $old AND report_date BETWEEN $start_before
+                                                                    AND $end_before)
+                AS old_code_claims_year_before,
+            count(*) FILTER (WHERE cause IN ($old, $new) AND report_date BETWEEN $start AND $end)
+                AS both_codes_claims,
+            count(*) FILTER (WHERE cause = $new AND report_date < $start) AS new_code_before
+        FROM claims
+        WHERE product = $product
+    """, {"old": spec["from_cause"], "new": spec["to_cause"], "product": spec["product"],
+          "start": start, "end": end, "start_before": start.replace(year=start.year - 1),
+          "end_before": end.replace(year=end.year - 1)})
+
+
 MEASURES = {
+    "unexplained_cost_shift": _cost_shift,
+    "cause_recode": _cause_recode,
     "weather_event": _weather_event,
     "shop_inflation": _shop_inflation,
     "duplicate_payments": _duplicate_payments,

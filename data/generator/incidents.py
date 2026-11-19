@@ -209,6 +209,58 @@ def early_claims(
     return claims, payments, evidence
 
 
+def cost_shifts(scenario: Scenario, claims: list[dict], payments: list[dict]) -> dict[str, dict]:
+    """Claims of one product in one state cost more for a while, evenly across causes,
+    adjusters, shops and channels, and nothing else in the warehouse changes: a real rise
+    whose cause isn't in the data (stress data: the right answer is that the data can't say).
+    Run before the duplicate load, so copied payments carry the new amounts."""
+    evidence = {}
+    for spec in by_type(scenario, "unexplained_cost_shift"):
+        shifted = {
+            id(c) for c in claims
+            if c["state"] == spec["state"] and c["product"] == spec["product"]
+            and spec["start_date"] <= c["loss_date"] <= spec["end_date"]
+        }
+        for claim in claims:
+            if id(claim) in shifted:
+                claim["reserve_amount"] = round(claim["reserve_amount"] * spec["cost_factor"], 2)
+        for payment in payments:
+            if id(payment["claim"]) in shifted:
+                payment["amount"] = round(payment["amount"] * spec["cost_factor"], 2)
+        evidence[spec["id"]] = {
+            "state": spec["state"],
+            "product": spec["product"],
+            "loss_dates": [spec["start_date"], spec["end_date"]],
+            "claims": len(shifted),
+        }
+    return evidence
+
+
+def recode_causes(scenario: Scenario, claims: list[dict]) -> dict[str, dict]:
+    """From a date, the claims system records part of one cause under a new code: every
+    second claim of that cause reported since then, in claim-number order. The cause seems to
+    fall while the two codes together don't (stress data: a change of definition, not of
+    risk). Run after claims are numbered."""
+    evidence = {}
+    for spec in by_type(scenario, "cause_recode"):
+        moved = [
+            c for c in claims
+            if c["product"] == spec["product"] and c["cause"] == spec["from_cause"]
+            and c["report_date"] >= spec["start_date"]
+        ]
+        moved = sorted(moved, key=lambda c: c["claim_id"])[::2]
+        for claim in moved:
+            claim["cause"] = spec["to_cause"]
+        evidence[spec["id"]] = {
+            "product": spec["product"],
+            "from_cause": spec["from_cause"],
+            "to_cause": spec["to_cause"],
+            "reported_from": spec["start_date"],
+            "claims_recoded": len(moved),
+        }
+    return evidence
+
+
 def duplicate_payments(scenario: Scenario, payments: list[dict]) -> dict[str, dict]:
     """A batch of payments is loaded a second time, with new payment IDs."""
     evidence = {}

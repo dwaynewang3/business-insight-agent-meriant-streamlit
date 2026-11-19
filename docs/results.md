@@ -72,6 +72,10 @@ Each finding carries the SQL behind it, and the eval runner checks that each key
 
 In one Texas run the agent added "a few large fire and liability claims" as a second driver, which its own figures didn't support. In one Southeast run it added a volume rise that isn't in the answer key. Both appeared in only one of three runs, which is the kind of failure repeat runs exist to catch. **Candidate fix:** none yet. The rate is well inside the target, and the improvement round will show whether failure modes 1 and 2's fixes change it.
 
+### 4. Repeated tool calls (found 2026-11-17, in every saved run on Meridian's data)
+
+Read after the project was published, the saved transcripts show the agent re-running a call it had already made, with the same input, turn after turn: 181 of 517 tool calls (35%), in 45 of 90 questions. One held-out "why" question ran the same call 18 times, and a held-out "what" question the same query 15 times; the demo's expired-licence answer ran `SELECT DATE '2026-02-10' < DATE '2026-03-01'` 11 times. On policy questions, part of the cause was an instruction: every number had to come from a query, so the agent restated a clause's number with queries such as `SELECT 1200 AS additional_excess_aud`. No answer was wrong because of it, but each repeat cost a model turn. **Fix, in three measured rounds** (decision 17 in [decisions.md](decisions.md)): refusing repeats made it worse (111 calls instead of 71 on 13 routing questions: the agent changed refused queries trivially to run them). The final design hands back the earlier result, tells the agent code re-checks every finding's query, refuses queries that read no table, and asks for the report after three repeats. On all 16 routing questions: 15 of 16 right against 14, at 89 calls and US$1.25 against 77 and US$1.10, one run each. The agent still asks for repeats about as often; they no longer run.
+
 ### Not agent failures
 
 - A run stalled overnight when the Mac went to sleep in the middle of an API call. It recovered after waking, but its 1,238 s is left out of the times above. Long runs now keep the Mac awake.

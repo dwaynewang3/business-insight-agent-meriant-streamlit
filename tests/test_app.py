@@ -90,24 +90,37 @@ def test_steps_read_as_plain_progress_lines():
 
 def test_rounded_key_numbers_are_marked_with_the_exact_value_from_the_query():
     rows = [("motor", 0.5362451, 1287), ("home", 0.5979165, 783)]
-    rounded = key_number_html({"label": "Motor loss ratio", "value": 53.6, "unit": "%"}, rows)
+    result = (["product", "loss_ratio", "claims"], rows)
+    motor = "product = motor"
+    rounded = key_number_html({"label": "Motor loss ratio", "value": 53.6, "unit": "%",
+                               "column": "loss_ratio", "row": motor}, result)
     assert rounded.startswith("Motor loss ratio: 53.6 %")
     assert 'title="Rounded. Exact value from the query: 53.6245">(rounded)</abbr>' in rounded
-    exact = key_number_html({"label": "Motor claims", "value": 1287, "unit": "claims"}, rows)
+    exact = key_number_html({"label": "Motor claims", "value": 1287, "unit": "claims",
+                             "column": "claims", "row": motor}, result)
     assert exact == "Motor claims: 1,287 claims"
+    # A saved report from before numbers named their cell is matched against the whole result.
+    assert "(rounded)" in key_number_html(
+        {"label": "Motor loss ratio", "value": 53.6, "unit": "%"}, result)
     # Not in the query (or no query): shown as written, with no claim to an exact value.
-    assert "rounded" not in key_number_html({"label": "x", "value": 9.9, "unit": "%"}, rows)
+    assert "rounded" not in key_number_html({"label": "x", "value": 9.9, "unit": "%"}, result)
     assert "rounded" not in key_number_html({"label": "x", "value": 53.6, "unit": "%"}, None)
 
 
-def test_a_key_number_its_query_doesnt_contain_is_marked_not_confirmed():
-    rows = [["motor", 0.536245, 1287]]
-    missing = key_number_html({"label": "Home claims", "value": 2210, "unit": "claims"}, rows)
+def test_a_key_number_its_cell_doesnt_hold_is_marked_not_confirmed():
+    result = (["product", "loss_ratio", "claims"],
+              [["motor", 0.536245, 1287], ["home", 0.597917, 783]])
+    missing = key_number_html({"label": "Home claims", "value": 2210, "unit": "claims"}, result)
     assert missing.endswith("(not confirmed)</abbr>")
+    # Home's count put on the motor row: in the result, but not in its cell.
+    swapped = key_number_html({"label": "Motor claims", "value": 783, "unit": "claims",
+                               "column": "claims",
+                               "row": "product = motor"}, result)
+    assert swapped.endswith("(not confirmed)</abbr>")
     assert "not confirmed" not in key_number_html(
-        {"label": "Motor claims", "value": 1287, "unit": "claims"}, rows)
+        {"label": "Motor claims", "value": 1287, "unit": "claims"}, result)
     # An empty result (or a finding without SQL) confirms nothing; no result says nothing.
-    assert "not confirmed" in key_number_html({"label": "x", "value": 1, "unit": ""}, [])
+    assert "not confirmed" in key_number_html({"label": "x", "value": 1, "unit": ""}, ([], []))
     assert "not confirmed" not in key_number_html({"label": "x", "value": 1, "unit": ""}, None)
     assert step_label({"event": "number_check", "checked": 3, "unconfirmed": [{}]}) == \
         "Checked 3 key numbers against their queries: 1 not found"

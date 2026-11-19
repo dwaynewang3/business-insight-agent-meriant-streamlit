@@ -2,9 +2,10 @@
 
 The plan's trust criterion is that every number in an answer links to the SQL that produced
 it (DEV_PLAN.md section 3). This re-runs each finding's `evidence_sql` through the SQL guard
-and confirms that each of its key numbers is a fair rounding of a value in the result, or of
-a column's total or average (the matching rules are in agent/key_numbers.py). A number the
-agent worked out in its head, or took from a different query, isn't confirmed.
+and confirms that each of its key numbers is a fair rounding of the cell it names in the
+result, or of that column's total or average (the matching rules are in
+agent/key_numbers.py). A number the agent worked out in its head, took from a different query,
+or put on the wrong row isn't confirmed.
 
 The result is reported as its own count ("key numbers confirmed"), apart from pass or fail,
 because the trust criterion is separate from whether the answer is right. The agent runs the
@@ -25,5 +26,8 @@ class NumberChecker:
 
     def check(self, report: dict | None) -> dict:
         """How many of the report's key numbers its findings' SQL confirms, and which not."""
-        return check_numbers(report, lambda sql: run_query(self.db_path, sql,
-                                                           GRADING_LIMITS).rows)
+        def result_for(sql: str):
+            result = run_query(self.db_path, sql, GRADING_LIMITS)
+            return result.columns, result.rows
+
+        return check_numbers(report, result_for)

@@ -10,6 +10,8 @@ from .config import Scenario
 from .domain import (
     CAUSES,
     CLOSED_WITHOUT_PAYMENT_RATE,
+    CONTACT_NOTE_SHARE,
+    CONTACT_TEMPLATES,
     LONG_TAIL_CAUSES,
     NOTE_TEMPLATES,
     STATE_COST_FACTOR,
@@ -17,6 +19,28 @@ from .domain import (
 )
 from .exposure import Exposure, coverage_end
 from .timeline import next_month
+
+
+def add_contact_details(scenario: Scenario, claims: list[dict], policies: list[dict],
+                        holders: list[dict]) -> int:
+    """Add the policyholder's name and phone or email to a share of claim notes, as staff
+    do. Uses a random stream of its own, so every other value in the warehouse is the same
+    as without it. Returns how many notes changed."""
+    rng = np.random.default_rng(scenario.seed + 1)
+    holder_of = {p["policy_id"]: p["policyholder_id"] for p in policies}
+    people = {h["policyholder_id"]: h for h in holders}
+    changed = 0
+    for claim in claims:
+        if rng.random() >= CONTACT_NOTE_SHARE:
+            continue
+        holder = people[holder_of[claim["policy_id"]]]
+        digits = (int(n) for n in rng.integers(0, [100, 1000, 1000]))
+        phone = "04{:02d} {:03d} {:03d}".format(*digits)
+        template = CONTACT_TEMPLATES[int(rng.integers(len(CONTACT_TEMPLATES)))]
+        detail = template.format(name=holder["full_name"], phone=phone, email=holder["email"])
+        claim["notes"] = f"{claim['notes']} {detail}" if claim["notes"] else detail
+        changed += 1
+    return changed
 
 
 def add_typo(text: str, rng: np.random.Generator) -> str:

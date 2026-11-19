@@ -60,6 +60,26 @@ def test_a_question_becomes_one_trace_with_its_calls(guarded_warehouse, tmp_path
     assert rows and all(name not in sent for name, _ in rows)
 
 
+def test_names_and_contact_details_are_masked_in_langfuse_but_kept_locally(
+        guarded_warehouse, dev, tmp_path, exported):
+    client, exporter = exported
+    name, email = dev.execute("SELECT full_name, email FROM policyholders LIMIT 1").fetchone()
+    question = f"What do we know about {name}? Their email is {email}, phone 0412 345 678."
+    body = json.loads(report()["text"]) | {"answer": f"{name} has one open claim."}
+    fake = FakeClaude(reply({"type": "text", "text": json.dumps(body)}))
+    config = AgentConfig(warehouse=guarded_warehouse, transport="inprocess")
+    with Session("fraud_team_lead", config, client=fake, trace_dir=tmp_path,
+                 langfuse=client) as chat:
+        answer = chat.ask(question)
+        chat.feedback(answer, helpful=False, comment=f"{name} has two claims, not one.")
+
+    sent = json.dumps([dict(span.attributes) for span in exporter.get_finished_spans()])
+    assert name not in sent and email not in sent and "0412 345 678" not in sent
+    assert "[name] has one open claim" in sent and "[email]" in sent and "[phone]" in sent
+    local = (tmp_path / f"{chat.session_id}.jsonl").read_text()
+    assert name in local and email in local  # the local trace keeps the full text
+
+
 ACTIONS = [
     {"type": "ticket", "title": "Remove duplicate payments", "reason": "159 rows loaded twice"},
     {"type": "alert", "title": "Shop RS-010 cost outlier", "reason": "Costs 60% above peers"},

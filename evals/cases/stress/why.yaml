@@ -1,0 +1,64 @@
+# "Why" cases on the stress data (data/scenarios/stress.yaml), harder than the dev and test
+# data's: two causes at once, a real change whose cause isn't in the data, and a change of
+# definition. Written on 2026-11-17, before any run. The fields are as in ../why.yaml, plus
+# one kind:
+#   unexplained   the change is real, but its cause isn't in the data. It passes only if the
+#                 agent confirms the change and says the data can't establish why, without
+#                 presenting a cause as found (graded by the LLM grader, like a control).
+
+cases:
+  - id: why-vic-paid-may-2026
+    question: Why did the amount we paid on Victorian claims jump in May 2026?
+    role: head_of_claims
+    kind: incident
+    answer_key: melbourne_hailstorm
+    explanation: >-
+      Two causes, and a complete answer names both. A severe hailstorm hit Melbourne on 27-28
+      April 2026 (WX-001), adding about 190 storm claims whose payments fell mostly in May:
+      real cost. And payments dated 11-22 May 2026 were loaded twice by the batch
+      "reload-2026-05-23", which doubled those days' paid amounts in every state, Victoria
+      included: a data pipeline bug, not real cost. In Victoria's May payments, the storm's
+      claims account for about A$1.6 million and the duplicate rows for about A$0.9 million.
+    must_mention:
+      - [WX-001, hailstorm]
+      - [reload-2026-05-23]
+    flags_data_quality: true
+    verify_sql: >-
+      SELECT sum(amount) FILTER (WHERE payment_date >= DATE '2026-05-01'
+                                 AND payment_date < DATE '2026-06-01')
+             > 1.8 * sum(amount) FILTER (WHERE payment_date >= DATE '2026-04-01'
+                                         AND payment_date < DATE '2026-05-01') AS ok
+      FROM claim_payments JOIN claims USING (claim_id) WHERE claims.state = 'VIC'
+
+  - id: why-nsw-motor-cost-winter-2026
+    question: Why did the average cost of motor claims in New South Wales go up from June 2026?
+    role: head_of_claims
+    kind: unexplained
+    answer_key: nsw_motor_cost_rise
+    verify_sql: >-
+      WITH costs AS (
+          SELECT c.loss_date,
+                 coalesce(sum(p.amount), 0) + any_value(c.reserve_amount) AS incurred
+          FROM claims c LEFT JOIN claim_payments p USING (claim_id)
+          WHERE c.state = 'NSW' AND c.product = 'motor'
+          GROUP BY c.claim_id, c.loss_date)
+      SELECT avg(incurred) FILTER (WHERE loss_date BETWEEN DATE '2026-06-01' AND DATE '2026-08-31')
+             > 1.3 * avg(incurred) FILTER (WHERE loss_date BETWEEN DATE '2025-06-01'
+                                                                AND DATE '2025-08-31') AS ok
+      FROM costs
+
+  - id: why-home-storm-drop-2026
+    question: >-
+      Home storm claims in July and August 2026 were about half what they were a year earlier.
+      Why?
+    role: claims_ops_manager
+    kind: incident
+    answer_key: storm_hail_recode
+    must_mention:
+      - [hail]
+    verify_sql: >-
+      SELECT count(*) FILTER (WHERE cause = 'storm'
+                              AND report_date BETWEEN DATE '2026-07-01' AND DATE '2026-08-31')
+             < 0.6 * count(*) FILTER (WHERE cause = 'storm' AND report_date
+                                      BETWEEN DATE '2025-07-01' AND DATE '2025-08-31') AS ok
+      FROM claims WHERE product = 'home'

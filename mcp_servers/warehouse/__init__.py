@@ -10,6 +10,7 @@ from .sql_guard import (
     QueryTimeout,
     check_sql,
     connect,
+    reads_no_table,
     run_query,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "QueryTimeout",
     "check_sql",
     "connect",
+    "reads_no_table",
     "run_query",
 ]
