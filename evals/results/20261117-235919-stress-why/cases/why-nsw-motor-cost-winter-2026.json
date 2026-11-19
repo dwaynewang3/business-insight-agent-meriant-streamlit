@@ -1,0 +1,796 @@
+{
+  "case_id": "why-nsw-motor-cost-winter-2026",
+  "repeat": 1,
+  "warehouse": "data/stress.duckdb",
+  "question": "Why did the average cost of motor claims in New South Wales go up from June 2026?",
+  "role": "head_of_claims",
+  "grade": {
+    "passed": false,
+    "category": "unscored",
+    "reason": "Nothing to find: scored by the LLM grader."
+  },
+  "report": {
+    "status": "answered",
+    "question_type": "why",
+    "interpretation": "Average claim cost is incurred (paid plus open reserve) divided by claim count, by loss date. It covers NSW motor claims. I compared Jan\u2013May 2026 with Jun\u2013Aug 2026. September is left out because it is incomplete (about 79% reported). The monthly series is noisy, so I used these two multi-month blocks.",
+    "answer": "The rise is real. NSW motor average cost was about $7,873 per claim for Jan\u2013May 2026 and about $11,992 for Jun\u2013Aug, up roughly 52%. The median rose too, from $5,525 to $9,051, so a few large claims don't explain it. The rise is mainly in collision claims, which averaged $8,663 before June and $13,027 from June. The share of collision claims above $15k went from 17.1% to 30.6%. The increase shows up across every repair shop, most adjusters, all channels and all metros, so no single shop, adjuster or location explains it. No NSW weather event is recorded for the period. Theft claims were also expensive in August (average about $36.6k), which pushed that month's average to $14.3k. I can't tell from the data why collision repairs got dearer. Plausible causes are higher repair costs or a change in the type of loss, and the data here can't separate them. September's average fell back to $6,978, but that month is incomplete.",
+    "answer_sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1",
+    "findings": [
+      {
+        "claim": "NSW motor average and median incurred cost were higher for Jun\u2013Aug 2026 than for Jan\u2013May 2026.",
+        "evidence_sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1",
+        "key_numbers": [
+          {
+            "label": "Avg cost Jan\u2013May",
+            "value": 7873,
+            "unit": "AUD",
+            "column": "avg_cost",
+            "row": "from_june = false"
+          },
+          {
+            "label": "Avg cost Jun\u2013Aug",
+            "value": 11992,
+            "unit": "AUD",
+            "column": "avg_cost",
+            "row": "from_june = true"
+          },
+          {
+            "label": "Median Jan\u2013May",
+            "value": 5525,
+            "unit": "AUD",
+            "column": "median_cost",
+            "row": "from_june = false"
+          },
+          {
+            "label": "Median Jun\u2013Aug",
+            "value": 9051,
+            "unit": "AUD",
+            "column": "median_cost",
+            "row": "from_june = true"
+          }
+        ],
+        "confidence": "high"
+      },
+      {
+        "claim": "Collision claims drive the rise, with more of them above $15k.",
+        "evidence_sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_over_15k FROM s GROUP BY 1 ORDER BY 1",
+        "key_numbers": [
+          {
+            "label": "Collision avg Jan\u2013May",
+            "value": 8663,
+            "unit": "AUD",
+            "column": "avg_cost",
+            "row": "from_june = false"
+          },
+          {
+            "label": "Collision avg Jun\u2013Aug",
+            "value": 13027,
+            "unit": "AUD",
+            "column": "avg_cost",
+            "row": "from_june = true"
+          },
+          {
+            "label": "Share over $15k Jan\u2013May",
+            "value": 17.1,
+            "unit": "%",
+            "column": "pct_over_15k",
+            "row": "from_june = false"
+          },
+          {
+            "label": "Share over $15k Jun\u2013Aug",
+            "value": 30.6,
+            "unit": "%",
+            "column": "pct_over_15k",
+            "row": "from_june = true"
+          }
+        ],
+        "confidence": "high"
+      }
+    ],
+    "hypotheses": [
+      {
+        "hypothesis": "Weather event (e.g. hail)",
+        "verdict": "ruled_out",
+        "evidence": "weather_events has no NSW events ending after 1 April 2026, and storm claims are only 4\u20137 per month."
+      },
+      {
+        "hypothesis": "A particular repair shop",
+        "verdict": "ruled_out",
+        "evidence": "Collision averages rose at all six shops (e.g. RS-001 $8.9k to $13.0k, RS-003 $7.0k to $11.9k). RS-006 is the highest at $22.3k but has only 8 claims."
+      },
+      {
+        "hypothesis": "A particular adjuster, channel or metro",
+        "verdict": "ruled_out",
+        "evidence": "Collision averages rose in 8 of 9 adjusters (ADJ-005 fell), in all three channels and in all three metros."
+      },
+      {
+        "hypothesis": "Mix shift towards costlier causes",
+        "verdict": "inconclusive",
+        "evidence": "Collision is still the largest cause, and its own average rose. Theft was very high in August ($36.6k) but is a small group."
+      },
+      {
+        "hypothesis": "Data problem (duplicates, incomplete month)",
+        "verdict": "ruled_out",
+        "evidence": "No duplicate claim rows. The 32 payments loaded outside nightly batches fall in May, which was a low month. September is incomplete and was excluded."
+      },
+      {
+        "hypothesis": "General repair cost inflation or more severe collisions",
+        "verdict": "inconclusive",
+        "evidence": "This fits the broad-based rise, but the warehouse has no repair-cost or severity-driver data to confirm it."
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "issue": "Latest month (Sep 2026) is only about 79% reported, and reserves on open claims are estimates.",
+        "impact": "September was excluded from the comparison. The 3 open collision claims in Jun\u2013Aug carry reserves, so the averages may still change."
+      },
+      {
+        "issue": "32 NSW motor payments in May 2026 were loaded outside the nightly batches.",
+        "impact": "May was a low-cost month, so this doesn't explain the June rise, but it is worth checking."
+      }
+    ],
+    "charts": [
+      {
+        "title": "NSW motor average claim cost by loss month",
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01') SELECT strftime(loss_date,'%Y-%m') AS month, round(avg(inc)) AS avg_cost FROM s GROUP BY 1 ORDER BY 1",
+        "type": "line",
+        "x": "month",
+        "y": "avg_cost"
+      }
+    ],
+    "proposed_actions": [
+      {
+        "type": "ticket",
+        "title": "Review NSW motor collision repair costs since June 2026",
+        "reason": "Collision costs rose broadly across shops and adjusters. Someone should check repair rates and supplier pricing, and look at the large August theft claims."
+      },
+      {
+        "type": "ticket",
+        "title": "Check the 32 off-batch payment loads in May 2026",
+        "reason": "Payments loaded outside the nightly batches can distort paid amounts."
+      }
+    ],
+    "open_questions": []
+  },
+  "error": null,
+  "cost_usd": 0.114577,
+  "seconds": 49.4,
+  "tool_calls": [
+    {
+      "tool": "query_metric",
+      "input": {
+        "metric": "average_claim_cost",
+        "dimensions": [],
+        "filters": [
+          {
+            "dimension": "product",
+            "values": [
+              "motor"
+            ]
+          },
+          {
+            "dimension": "state",
+            "values": [
+              "NSW"
+            ]
+          }
+        ],
+        "grain": "month",
+        "start": "2025-10-01",
+        "end": "2026-09-30"
+      },
+      "source": "agreed_metric",
+      "sql": "WITH source AS (\n    SELECT c.*, p.channel, p.metro,\n           coalesce(pay.paid, 0) AS paid_to_date,\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\n           c.close_date - c.report_date AS days_to_close\n    FROM claims c\n    JOIN policies p USING (policy_id)\n    LEFT JOIN (\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\n    ) pay USING (claim_id)\n)\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, sum(incurred) / count(*) AS value\nFROM source\nWHERE loss_date >= DATE '2025-10-01'\n  AND loss_date <= DATE '2026-09-30'\n  AND product IN ('motor')\n  AND state IN ('NSW')\nGROUP BY ALL\nORDER BY ALL",
+      "rows": 12,
+      "truncated": false
+    },
+    {
+      "tool": "get_metric",
+      "input": {
+        "name": "average_claim_cost"
+      },
+      "source": null
+    },
+    {
+      "tool": "check_data_quality",
+      "input": {
+        "table": "claims"
+      },
+      "source": null
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01')\nSELECT strftime(loss_date,'%Y-%m') m, count(*) n, round(avg(inc)) avg_all, round(avg(inc) FILTER (WHERE cause='collision')) coll, count(*) FILTER (WHERE cause='collision') n_coll, round(avg(inc) FILTER (WHERE cause='storm')) storm, count(*) FILTER (WHERE cause='storm') n_storm, round(avg(inc) FILTER (WHERE cause='theft')) theft, round(avg(inc) FILTER (WHERE cause='third_party_property')) tpp, count(*) FILTER (WHERE inc>30000) big, round(median(inc)) med FROM s GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01')\nSELECT strftime(loss_date,'%Y-%m') m, count(*) n, round(avg(inc)) avg_all, round(avg(inc) FILTER (WHERE cause='collision')) coll, count(*) FILTER (WHERE cause='collision') n_coll, round(avg(inc) FILTER (WHERE cause='storm')) storm, count(*) FILTER (WHERE cause='storm') n_storm, round(avg(inc) FILTER (WHERE cause='theft')) theft, round(avg(inc) FILTER (WHERE cause='third_party_property')) tpp, count(*) FILTER (WHERE inc>30000) big, round(median(inc)) med FROM s GROUP BY 1 ORDER BY 1",
+      "rows": 9,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-06-01' AND loss_date<'2026-09-01')\nSELECT repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s LEFT JOIN repair_shops r USING(repair_shop_id) GROUP BY ALL ORDER BY tot DESC LIMIT 8"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-06-01' AND loss_date<'2026-09-01')\nSELECT repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s LEFT JOIN repair_shops r USING(repair_shop_id) GROUP BY ALL ORDER BY tot DESC LIMIT 8",
+      "rows": 7,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT * FROM weather_events WHERE state='NSW' AND end_date>='2026-04-01' ORDER BY start_date"
+      },
+      "source": "custom_query",
+      "sql": "SELECT * FROM weather_events WHERE state='NSW' AND end_date>='2026-04-01' ORDER BY start_date",
+      "rows": 0,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc, p.channel, p.metro FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT 'shop' dim, repair_shop_id k, loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) a FROM s GROUP BY ALL\nUNION ALL SELECT 'adj', adjuster_id, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'channel', channel, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'metro', metro, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nORDER BY 1,2,3"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc, p.channel, p.metro FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT 'shop' dim, repair_shop_id k, loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) a FROM s GROUP BY ALL\nUNION ALL SELECT 'adj', adjuster_id, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'channel', channel, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'metro', metro, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nORDER BY 1,2,3",
+      "rows": 42,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0) paid, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, round(avg(inc) FILTER (WHERE status='closed')) avg_closed, count(*) FILTER (WHERE status='open') n_open, round(avg(inc) FILTER (WHERE status='open')) avg_open, round(avg(reserve_amount) FILTER (WHERE status='open')) avg_res, count(*) FILTER (WHERE inc>15000) n_gt15k, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_gt15k FROM s GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0) paid, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, round(avg(inc) FILTER (WHERE status='closed')) avg_closed, count(*) FILTER (WHERE status='open') n_open, round(avg(inc) FILTER (WHERE status='open')) avg_open, round(avg(reserve_amount) FILTER (WHERE status='open')) avg_res, count(*) FILTER (WHERE inc>15000) n_gt15k, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_gt15k FROM s GROUP BY 1 ORDER BY 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "SELECT strftime(date_trunc('month',payment_date),'%Y-%m') m, count(*) n, round(avg(amount)) avg_pay, count(DISTINCT load_batch) batches, count(*) FILTER (WHERE load_batch NOT LIKE 'nightly-%') non_nightly FROM claim_payments cp JOIN claims c USING(claim_id) WHERE c.state='NSW' AND c.product='motor' AND payment_date>='2026-01-01' GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "SELECT strftime(date_trunc('month',payment_date),'%Y-%m') m, count(*) n, round(avg(amount)) avg_pay, count(DISTINCT load_batch) batches, count(*) FILTER (WHERE load_batch NOT LIKE 'nightly-%') non_nightly FROM claim_payments cp JOIN claims c USING(claim_id) WHERE c.state='NSW' AND c.product='motor' AND payment_date>='2026-01-01' GROUP BY 1 ORDER BY 1",
+      "rows": 9,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(avg(inc) FILTER (WHERE cause='collision')) collision_avg, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(avg(inc) FILTER (WHERE cause='collision')) collision_avg, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_over_15k FROM s GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_over_15k FROM s GROUP BY 1 ORDER BY 1",
+      "rows": 2,
+      "truncated": false
+    },
+    {
+      "tool": "run_sql",
+      "input": {
+        "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1"
+      },
+      "source": "custom_query",
+      "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1",
+      "rows": 2,
+      "truncated": false
+    }
+  ],
+  "model_calls": [
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 4,
+      "output_tokens": 311,
+      "cache_read_input_tokens": 15747,
+      "cache_creation_input_tokens": 174,
+      "cost_usd": 0.006702,
+      "seconds": 3.16,
+      "request_id": "req_011Ch8YRABX1hah1tZeZdoVt",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 868,
+      "cache_read_input_tokens": 15921,
+      "cache_creation_input_tokens": 1786,
+      "cost_usd": 0.016333,
+      "seconds": 6.1,
+      "request_id": "req_011Ch8YRPv26SwHgyCvc7oru",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 538,
+      "cache_read_input_tokens": 17707,
+      "cache_creation_input_tokens": 1881,
+      "cost_usd": 0.013628,
+      "seconds": 4.36,
+      "request_id": "req_011Ch8YRrE3xNcBQGfMedacm",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 737,
+      "cache_read_input_tokens": 19588,
+      "cache_creation_input_tokens": 1538,
+      "cost_usd": 0.015137,
+      "seconds": 5.86,
+      "request_id": "req_011Ch8YSB5NWdaraU6ZPq417",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 427,
+      "cache_read_input_tokens": 21126,
+      "cache_creation_input_tokens": 1199,
+      "cost_usd": 0.011497,
+      "seconds": 4.4,
+      "request_id": "req_011Ch8YScMef5h93C1uvTBmg",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 326,
+      "cache_read_input_tokens": 22325,
+      "cache_creation_input_tokens": 529,
+      "cost_usd": 0.009052,
+      "seconds": 3.22,
+      "request_id": "req_011Ch8YSwGSe2PL2PbDgGPGi",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "tool_use",
+      "input_tokens": 2,
+      "output_tokens": 278,
+      "cache_read_input_tokens": 22854,
+      "cache_creation_input_tokens": 428,
+      "cost_usd": 0.008425,
+      "seconds": 3.06,
+      "request_id": "req_011Ch8YTBJ3uJ4w6UjhNZGgS",
+      "batch": false
+    },
+    {
+      "session_id": "s-a73c43755521",
+      "run_id": "r-e202ab2dd994",
+      "purpose": "eval",
+      "model_requested": "claude-sonnet-5-5",
+      "model_served": "claude-sonnet-5-5",
+      "fallback": false,
+      "stop_reason": "end_turn",
+      "input_tokens": 2,
+      "output_tokens": 2824,
+      "cache_read_input_tokens": 23282,
+      "cache_creation_input_tokens": 361,
+      "cost_usd": 0.033803,
+      "seconds": 18.55,
+      "request_id": "req_011Ch8YTQZWf7g2Y4dknu8Ae",
+      "batch": false
+    }
+  ],
+  "models_served": [
+    "claude-sonnet-5-5"
+  ],
+  "fell_back": false,
+  "proposed_actions": [
+    {
+      "type": "ticket",
+      "title": "Review NSW motor collision repair costs since June 2026",
+      "reason": "Collision costs rose broadly across shops and adjusters. Someone should check repair rates and supplier pricing, and look at the large August theft claims."
+    },
+    {
+      "type": "ticket",
+      "title": "Check the 32 off-batch payment loads in May 2026",
+      "reason": "Payments loaded outside the nightly batches can distort paid amounts."
+    }
+  ],
+  "session_id": "s-a73c43755521",
+  "run_id": "r-e202ab2dd994",
+  "numbers": {
+    "checked": 8,
+    "confirmed": 8,
+    "unconfirmed": []
+  },
+  "citations": {
+    "cited": 0,
+    "confirmed": 0,
+    "without_version": 0,
+    "unconfirmed": []
+  },
+  "agent_version": "0.2.0+ce1cc164f7",
+  "transcript": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Session context, set by the app:\n- User's role: Head of Claims. Sees all data except personal data.\n- Warehouse extract date (today): 2026-09-30. Loss dates run from 2025-01-01 to 2026-09-30."
+        },
+        {
+          "type": "text",
+          "text": "Why did the average cost of motor claims in New South Wales go up from June 2026?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01SzfQiYGd5UieagRXBM1YJN",
+          "input": {
+            "metric": "average_claim_cost",
+            "dimensions": [],
+            "filters": [
+              {
+                "dimension": "product",
+                "values": [
+                  "motor"
+                ]
+              },
+              {
+                "dimension": "state",
+                "values": [
+                  "NSW"
+                ]
+              }
+            ],
+            "grain": "month",
+            "start": "2025-10-01",
+            "end": "2026-09-30"
+          },
+          "name": "query_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01P4vfGcuNcLRHYwphwQwkvt",
+          "input": {
+            "name": "average_claim_cost"
+          },
+          "name": "get_metric",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_014g4e5EhKPxxqJT53ysU2ni",
+          "input": {
+            "table": "claims"
+          },
+          "name": "check_data_quality",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01SzfQiYGd5UieagRXBM1YJN",
+          "content": "{\"metric\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"unit\": \"AUD\", \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"sql\": \"WITH source AS (\\n    SELECT c.*, p.channel, p.metro,\\n           coalesce(pay.paid, 0) AS paid_to_date,\\n           coalesce(pay.paid, 0) + c.reserve_amount AS incurred,\\n           c.close_date - c.report_date AS days_to_close\\n    FROM claims c\\n    JOIN policies p USING (policy_id)\\n    LEFT JOIN (\\n        SELECT claim_id, sum(amount) AS paid FROM claim_payments GROUP BY claim_id\\n    ) pay USING (claim_id)\\n)\\nSELECT CAST(date_trunc('month', loss_date) AS DATE) AS period, sum(incurred) / count(*) AS value\\nFROM source\\nWHERE loss_date >= DATE '2025-10-01'\\n  AND loss_date <= DATE '2026-09-30'\\n  AND product IN ('motor')\\n  AND state IN ('NSW')\\nGROUP BY ALL\\nORDER BY ALL\", \"columns\": [\"period\", \"value\"], \"rows\": [[\"2025-10-01\", 7036.518253968255], [\"2025-11-01\", 8454.903692307693], [\"2025-12-01\", 6188.542622950819], [\"2026-01-01\", 6618.997794117647], [\"2026-02-01\", 7596.574833333333], [\"2026-03-01\", 8075.971884057972], [\"2026-04-01\", 11882.8815], [\"2026-05-01\", 6619.880344827586], [\"2026-06-01\", 12240.192666666666], [\"2026-07-01\", 9817.689135802468], [\"2026-08-01\", 14341.414477611941], [\"2026-09-01\", 6978.15574074074]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01P4vfGcuNcLRHYwphwQwkvt",
+          "content": "{\"name\": \"average_claim_cost\", \"label\": \"Average claim cost\", \"description\": \"Incurred amount (paid plus open reserves) divided by claim count, by loss date.\", \"unit\": \"AUD\", \"dimensions\": [\"state\", \"region\", \"metro\", \"product\", \"cause\", \"status\", \"channel\", \"adjuster_id\", \"repair_shop_id\"], \"definition\": \"sum(incurred) / count(*) over claim_facts\", \"time_column\": \"loss_date\"}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_014g4e5EhKPxxqJT53ysU2ni",
+          "content": "{\"table\": \"claims\", \"checks\": [{\"check\": \"duplicate_rows\", \"status\": \"ok\", \"finding\": \"No repeated rows (ignoring claim_id).\", \"sql\": \"SELECT coalesce(sum(extra), 0) AS duplicate_rows FROM (SELECT policy_id, product, cause, state, region, postcode, loss_date, report_date, status, adjuster_id, repair_shop_id, reserve_amount, close_date, notes, count(*) - 1 AS extra FROM claims GROUP BY ALL HAVING count(*) > 1)\"}, {\"check\": \"empty_values\", \"status\": \"warning\", \"finding\": \"Unexpected empty values: notes: 227. Empty as documented: close_date: 355, repair_shop_id: 3472.\"}, {\"check\": \"outliers\", \"status\": \"warning\", \"finding\": \"10 values of reserve_amount are far above the rest (above 59,948; the largest is 219,257).\", \"sql\": \"WITH q AS (SELECT quantile_cont(reserve_amount, 0.25) AS q1, quantile_cont(reserve_amount, 0.75) AS q3 FROM claims WHERE reserve_amount > 0) SELECT count(*) FILTER (WHERE reserve_amount > q3 + 3 * (q3 - q1)), max(reserve_amount), any_value(q3 + 3 * (q3 - q1)) FROM claims, q\"}, {\"check\": \"incomplete_months\", \"status\": \"warning\", \"finding\": \"Claims are reported a median of 5 days after the loss, so recent loss months are still filling in. Share of each month's claims probably reported by the extract date: 2026-09 about 79%.\", \"extract_date\": \"2026-09-30\"}]}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS5AUKEAgTGAI4AUIIdGhpbmtpbmcSDD8guNBmp+hjwSbt/BoMnEelXf9vPYp7I5AvIjCsUkJe5dyIgO7XeJdpLtf2ITW2gQDJiiRJCJUCyKRx+E8rv9IKZSY3y57gOshDQjYqgQUFKk2lFv7wM09Aj2woYGUPFUcKU4X9vltfMso5KQM8OvnOpcCYDpnTm9loARwnGgZqojD1HeFZXviIlSifB83m7XYDqbalkdPTFGblpFfuV/nRr7u0GBcCjNHWPzmtYsdo3HK3CsXK0BjcQ4AcBpsjvYgx7OGLRa7xKq76Bu/9WwbtvGTd2/EOkiQntLkgKp4dZjKZkftz8R6qJaMLp/o2lLiOtBDxG1ZkQlt2w7oFAe3FPb5l/rv1J670KL/IVeNWg14c/VtF3sxsyJO2ZVQvpBc6K+uZWoCG/AI7s7n/fvzcV+iAQGeeFUjARL39zMq4BjxL4rfqDyJ2vv/1zY+oxmrZj9GzIhUkD4IZ2ZyK80PY0j3VdaY7ih6urD2/QOaTNL9yshB8OrwgflFVeZ5PwrKd0nDHd5a+g9z/set0HURpLNzHh2Ay2fgrdJS7GQQH1/I7UpAq1/oNekKxQbMxNHbhpoBvvyMlQPTWIpuuYoDjgr7ntXKMKzY5U60TRs5FnEbFv3G3a8OIcbigfe/s48kRMU1vRy0fnx/NRxHj4/51yZeFL3PSEv3FmBvjl2UD1NYVb7M4D9SacBE03XWbvbuf+fPHQq4HjPnkL53Ug11WA3znoKv8Ucv8QsBID6HWEU4SiYMPjPSjLQBYQoMqmHSKGdaKjpobbWhA8dB2tFsuyC0Q7NSw75UlPShnJDXrV0ySRAKXmYiIAGAbJbBo2PuOwN6oEwsk9BQoDpQ77WSRWcYdNNO02Xld2P+U2uQ6TdvndG774l83kA1FNUakz/Zd2lEVJ5WX/vncYuTUCGKRze4+hjfAPY4gep+AaLNWhT1Ma/Tjgy6EAQ8qagFuURgB",
+          "thinking": "The volatility looks like the thing to dig into, so I'm going to break the drivers down by cause, repair shop, large claims, and weather events to see which one is moving the numbers.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01JqDbqQGAyhKGm5YAxob285",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01')\nSELECT strftime(loss_date,'%Y-%m') m, count(*) n, round(avg(inc)) avg_all, round(avg(inc) FILTER (WHERE cause='collision')) coll, count(*) FILTER (WHERE cause='collision') n_coll, round(avg(inc) FILTER (WHERE cause='storm')) storm, count(*) FILTER (WHERE cause='storm') n_storm, round(avg(inc) FILTER (WHERE cause='theft')) theft, round(avg(inc) FILTER (WHERE cause='third_party_property')) tpp, count(*) FILTER (WHERE inc>30000) big, round(median(inc)) med FROM s GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_012PPVaYvJ2stLXFik5KjRbj",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-06-01' AND loss_date<'2026-09-01')\nSELECT repair_shop_id, r.name, r.network_status, count(*) n, round(avg(inc)) avg_inc, round(sum(inc)) tot FROM s LEFT JOIN repair_shops r USING(repair_shop_id) GROUP BY ALL ORDER BY tot DESC LIMIT 8"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_01VTG4Qdy1EzzagjM5maNt9u",
+          "input": {
+            "sql": "SELECT * FROM weather_events WHERE state='NSW' AND end_date>='2026-04-01' ORDER BY start_date"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01JqDbqQGAyhKGm5YAxob285",
+          "content": "{\"columns\": [\"m\", \"n\", \"avg_all\", \"coll\", \"n_coll\", \"storm\", \"n_storm\", \"theft\", \"tpp\", \"big\", \"med\"], \"rows\": [[\"2026-01\", 68, 6619.0, 7669.0, 31, 6369.0, 7, 16495.0, 9859.0, 0, 5783.0], [\"2026-02\", 60, 7597.0, 8541.0, 37, 7495.0, 1, 20244.0, 9015.0, 1, 5819.0], [\"2026-03\", 69, 8076.0, 8119.0, 37, 5450.0, 2, 16928.0, 15885.0, 3, 4840.0], [\"2026-04\", 40, 11883.0, 13145.0, 18, 9819.0, 4, 14547.0, 14573.0, 4, 9395.0], [\"2026-05\", 58, 6620.0, 7794.0, 29, 0.0, 1, 18653.0, 10858.0, 1, 4053.0], [\"2026-06\", 75, 12240.0, 15397.0, 40, 10076.0, 6, 19766.0, 7947.0, 6, 9051.0], [\"2026-07\", 81, 9818.0, 11370.0, 44, 9113.0, 7, 11354.0, 12129.0, 3, 8084.0], [\"2026-08\", 67, 14341.0, 12434.0, 37, 8294.0, 5, 36604.0, 21752.0, 8, 10721.0], [\"2026-09\", 54, 6978.0, 9269.0, 29, 4871.0, 4, 15326.0, 4116.0, 0, 5402.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_012PPVaYvJ2stLXFik5KjRbj",
+          "content": "{\"columns\": [\"repair_shop_id\", \"name\", \"network_status\", \"n\", \"avg_inc\", \"tot\"], \"rows\": [[null, null, null, 51, 17329.0, 883761.0], [\"RS-001\", \"Wells Collision Repairs\", \"preferred\", 57, 10545.0, 601065.0], [\"RS-002\", \"Jefferson Smash Repairs\", \"preferred\", 35, 10999.0, 384982.0], [\"RS-004\", \"Weaver Panel & Paint\", \"non-preferred\", 24, 9900.0, 237605.0], [\"RS-003\", \"Wallace Collision Repairs\", \"preferred\", 23, 10052.0, 231193.0], [\"RS-006\", \"Johnson Collision Repairs\", \"non-preferred\", 13, 14752.0, 191775.0], [\"RS-005\", \"Kirk Smash Repairs\", \"non-preferred\", 20, 7187.0, 143742.0]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VTG4Qdy1EzzagjM5maNt9u",
+          "content": "{\"columns\": [\"event_id\", \"state\", \"area\", \"event_type\", \"start_date\", \"end_date\", \"severity\"], \"rows\": [], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS6gYKEAgTGAI4AUIIdGhpbmtpbmcSDLiWJScaojxbJyz+UhoMtWcs9jYxoTNlKW04IjAW3yuw4NVS2mJ2VemZvfyyhxLonDwy6FUX14GQ63xKs1x+/JQE+AgaHwCtaUklfp4qhwZJQZfPOmxj+2jhoG/dhUa5CmgwcHaxfYOhRe6p+1HSNxZURn828+zDShrbmJz/8rKGs8a23zhaQE4o2dTnzrUTdIGDLSbGJqN+uwcLkqCW1rfGiHRjMXMCH5smyArcYtc/rr54qPvYtF20ztv6bysDPGdyE/mmUWbiTl9VQ9wOK4SCJbB8930r8NT8RtekexjQ4H4YItJS/kdb22pRdIex2qFutD8gscX15482AVG2A9Ot3wR8rZm3vhIdUkaP9BqUKGxSTOC5Oz/r46CeFMJ+xsL4E49BbPNzx2ucC1Fv0n0+4vXcU/UesnZwOkr9sAami2PXOw5CtsIVwACXgmAY88KKnTp/x9JXujH+BaqbaZBKVIFcmUJ2T2ClQwgEoFwnUU819gqhGDF0zJjnyaBmNjrOI4GtUkMfseG4As/XEaQGrCKLj4moTCKcesbwT1t/Vi2h9vPZLTVFcyFeG5IP6kusNO0jTbwv4fX7WeZ2mcFfKsj8DlCmnjKYdBWWM8OZ1WXfMUKG53JhgLPURUCqqTbsJbGZgbTF0dJhuVQ9Lvy/KeUCdyRYCdj8Evge3oQet6qBVzZfg0DMFQ6QGUFHSwORVZNYpKLJk5jHDDeQKelRxFDpjQjZSNUiKbTo4ixeYtwVSzrJrjnP29Z9FxgX7YRWC1AIMyuL5hWN5EjJrdY64WeWUkxMsyq375Q9nNPE0M5/cjKQ3F8qnkweMWQGoV18xnmGE1pxWPeJcw5HstbaQboXdAQrynkzko64+9R/oZj0w0GgxVW3G4TdVqxWrxy1agSM8q+a3dJ6bKEz5a/TwkfL6OKcVQZBGZ9p3zag76/XeBqYOw0l49Rzl6WFRLvafsVutUbnT6ahlPVOI3ICT+n9yv8u/WIi5DnWx4bfjgkEJvMK+wGY96g0CZPdBwo6eV1H586Ou3Ws7tvm4TXhKgktiYl1Rj91TnfyTmIQgBuL2xk0PfdmiFQtIx4nCLVElY/NqJQflbJogzsX9sXen2U85KTfqPgIOlVToUynEbfbiz5CGAE=",
+          "thinking": "I'm noting that collision average costs jumped from roughly 7.5\u20138k to 11\u201315k starting in June. Next I'll check the shops and adjusters tied to collision claims, comparing before and after June.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01VJ2NabBN5ifN28hz1ZRkTn",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc, p.channel, p.metro FROM claims c JOIN policies p USING(policy_id) LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT 'shop' dim, repair_shop_id k, loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) a FROM s GROUP BY ALL\nUNION ALL SELECT 'adj', adjuster_id, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'channel', channel, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nUNION ALL SELECT 'metro', metro, loss_date>='2026-06-01', count(*), round(avg(inc)) FROM s GROUP BY ALL\nORDER BY 1,2,3"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01VJ2NabBN5ifN28hz1ZRkTn",
+          "content": "{\"columns\": [\"dim\", \"k\", \"post\", \"n\", \"a\"], \"rows\": [[\"adj\", \"ADJ-001\", false, 16, 7522.0], [\"adj\", \"ADJ-001\", true, 16, 15192.0], [\"adj\", \"ADJ-002\", false, 17, 10344.0], [\"adj\", \"ADJ-002\", true, 11, 12122.0], [\"adj\", \"ADJ-003\", false, 13, 10097.0], [\"adj\", \"ADJ-003\", true, 10, 12859.0], [\"adj\", \"ADJ-004\", false, 15, 6541.0], [\"adj\", \"ADJ-004\", true, 4, 16460.0], [\"adj\", \"ADJ-005\", false, 23, 10639.0], [\"adj\", \"ADJ-005\", true, 19, 9287.0], [\"adj\", \"ADJ-006\", false, 23, 7573.0], [\"adj\", \"ADJ-006\", true, 21, 12312.0], [\"adj\", \"ADJ-007\", false, 14, 8261.0], [\"adj\", \"ADJ-007\", true, 13, 13617.0], [\"adj\", \"ADJ-008\", false, 15, 8751.0], [\"adj\", \"ADJ-008\", true, 15, 14135.0], [\"adj\", \"ADJ-009\", false, 16, 7839.0], [\"adj\", \"ADJ-009\", true, 12, 15114.0], [\"channel\", \"broker\", false, 66, 7045.0], [\"channel\", \"broker\", true, 66, 12786.0], [\"channel\", \"direct\", false, 51, 10929.0], [\"channel\", \"direct\", true, 30, 13549.0], [\"channel\", \"online\", false, 35, 8412.0], [\"channel\", \"online\", true, 25, 13036.0], [\"metro\", \"Newcastle-Hunter\", false, 44, 8712.0], [\"metro\", \"Newcastle-Hunter\", true, 37, 11461.0], [\"metro\", \"Sydney\", false, 77, 8694.0], [\"metro\", \"Sydney\", true, 57, 13118.0], [\"metro\", \"Wollongong\", false, 31, 8517.0], [\"metro\", \"Wollongong\", true, 27, 14980.0], [\"shop\", \"RS-001\", false, 53, 8914.0], [\"shop\", \"RS-001\", true, 42, 12966.0], [\"shop\", \"RS-002\", false, 32, 9527.0], [\"shop\", \"RS-002\", true, 24, 12397.0], [\"shop\", \"RS-003\", false, 21, 7030.0], [\"shop\", \"RS-003\", true, 19, 11877.0], [\"shop\", \"RS-004\", false, 24, 8209.0], [\"shop\", \"RS-004\", true, 15, 13546.0], [\"shop\", \"RS-005\", false, 12, 6538.0], [\"shop\", \"RS-005\", true, 13, 9732.0], [\"shop\", \"RS-006\", false, 10, 11638.0], [\"shop\", \"RS-006\", true, 8, 22349.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS9AYKEAgTGAI4AUIIdGhpbmtpbmcSDEoOKspkbWw+ZnrxvxoMrYz3E76mqMkPBUx4IjBCoe+9UvJzJiv3sivlst9ymdtbQJ+V6iq9hojE4EqJQgMUNQv37fqzVVutcmttKH0qkQYyFzIKyulA57AGz6lO39xsLSkUMZyccG8aIk7E52rNX/EGyp6g86kSCfLM74oCP1F929hlKZX1QYcST5MhWE2dY1+Heyh4Gs99Trj79CU6KVFSO6QdckwtWRUtr71b2/9a1YEUfgyG35GVgQaA6ZKlaoU1v2u/okvAywJZY9jEQ2JakDKwF3Vdx1FhvWLf4jGrlgSyx2mQKXqNfNspGUygkw9rGgY+tC9froh4bXLP2TmqHusT4cfoE4UUZU/nfauvMLs5yaMDNd6nz4HBbVLxjQW65chwOti3BZZ7Qq5L7IzZqVWVGD2XPlLvcxsMmxjUZjWUKZNx94jjf4KeJOPmoiTLYS9cyWxtJqjbTUrYEvsqj8pR6gRcx7wiiovrwYJXVpJasRCLeOJEswInFZYbjVbbXcL7BlVXqpMccJhMVriTPynOLAQTle+nMN7Ym6oam59Y96UOlLfUiPkpMDoeDXMezN73IxK2aRHZzQgpFHcnOKlXmbutUFMWroLJm2ikdprN0xO1dTgaWbPBh1k7Dv81PV4b2z6sE7NK5n1VBZvbdciEJKYTcJwQb0Zjw0iRDM9/x6TXRqaa18uVZQUvWXz9M1CyH6+63gYvTDu4n8Xq4VdaT5oV0uzsjvxDEbbj8f4n5lXiXvYoJ/05HvW/d1IdjaA8xhDuREufwzPeQyPVwZWuWl9DdpA5mq3WCEp/0waDmoyJA5oC+jZs1hbzbfCQwHT/UWTdz+KkNDQlwKGdNpdGkyyNlaJ/DhyWnhWjr4VLQcdfCO5/CfWflOiGcizAu8yRvljZ7BYgHKx3vbzLPD0G6UjmNvA40yVdVG7Yqgpfi2rKH0WBIQ21dVFHJTA/jIBSrlyacqfPiJ/n1WGYm5XfxPhPtdFgYh3kknt0RAAFJg6kk8+5cGLY5XCbMRlBgypOqr5k55rQdJFGGs2kBjpe7PuDORbcWmhCz5CxXhZNOy9Yv83X3WslR7yHvKkZw6RI/LlQBdF7Za9+lmIB8P7I+fIO73ACrgFMcxw1Pn+NNycCkIv3AuSS6i8y/BgB",
+          "thinking": "I'm checking whether the pattern is broad-based across everything, looking at how the large claims are distributed and how open claims compare with paid and reserved ones. I'll also check the incurred components.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01Nw4PkK8ocF1bjyJNAJdGxK",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0) paid, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' post, count(*) n, round(avg(inc)) avg_inc, round(median(inc)) med, round(avg(inc) FILTER (WHERE status='closed')) avg_closed, count(*) FILTER (WHERE status='open') n_open, round(avg(inc) FILTER (WHERE status='open')) avg_open, round(avg(reserve_amount) FILTER (WHERE status='open')) avg_res, count(*) FILTER (WHERE inc>15000) n_gt15k, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_gt15k FROM s GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        },
+        {
+          "id": "toolu_017k7JeJMQDtfAiMDTc3Xp9o",
+          "input": {
+            "sql": "SELECT strftime(date_trunc('month',payment_date),'%Y-%m') m, count(*) n, round(avg(amount)) avg_pay, count(DISTINCT load_batch) batches, count(*) FILTER (WHERE load_batch NOT LIKE 'nightly-%') non_nightly FROM claim_payments cp JOIN claims c USING(claim_id) WHERE c.state='NSW' AND c.product='motor' AND payment_date>='2026-01-01' GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01Nw4PkK8ocF1bjyJNAJdGxK",
+          "content": "{\"columns\": [\"post\", \"n\", \"avg_inc\", \"med\", \"avg_closed\", \"n_open\", \"avg_open\", \"avg_res\", \"n_gt15k\", \"pct_gt15k\"], \"rows\": [[false, 152, 8663.0, 6654.0, 8663.0, 0, null, null, 26, 17.1], [true, 121, 13027.0, 9762.0, 12879.0, 3, 18849.0, 16481.0, 37, 30.6]], \"truncated\": false}",
+          "is_error": false
+        },
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_017k7JeJMQDtfAiMDTc3Xp9o",
+          "content": "{\"columns\": [\"m\", \"n\", \"avg_pay\", \"batches\", \"non_nightly\"], \"rows\": [[\"2026-01\", 86, 5103.0, 28, 0], [\"2026-02\", 84, 4551.0, 26, 0], [\"2026-03\", 100, 5457.0, 30, 0], [\"2026-04\", 75, 6344.0, 26, 0], [\"2026-05\", 100, 6270.0, 30, 32], [\"2026-06\", 83, 4751.0, 28, 0], [\"2026-07\", 101, 7785.0, 30, 0], [\"2026-08\", 105, 7852.0, 31, 0], [\"2026-09\", 103, 7172.0, 29, 0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "signature": "CAQS0QgKEAgTGAI4AUIIdGhpbmtpbmcSDGdvd+79RK34GAs/shoMfpVPbyL+7FT4wuUUIjAMTk1Leamz0VGUvefxlx+x3kiIa9t5e9fZZId9JyQWG899qwwkGzsqQR8cyrVlcRQq7ge3Hi1bPcRAOSLrx/GjrVrdD4ygpbm+38zmtJpRH2DJAeNyLg6hsweMi4c4k33BCmdaSKURBHPRVxXviFspFU4CfthKVv5v6/sTjWMK1Aibw+b6jCibZa4tUxErb63xSXCv1ohRAgcssYfj7RxB5XM7xGwYISCkvA6Hjx48gMCF4HeerVM54Dc/y90WA/Z32zDWdrQDFuADmyDbhY9UVFu/tYdHrccelz09CmKfvPB7zlZgwf8o6tejOer1HfUWhvb/+ceUt+SAzohdzhdmduoKkbcOng2f4ItSy34HwvfhacXdHgFgVeePWtkfxP2LxX2U0k35WGdW0JA3mlqmW1aQpvcF39jdxNPbjysR+NX2Afb2rjbGx+VEf/LLDz7BYXrid1JL6mWuHaADMAl951Wtx55qcQw0NX46VwQf2MRUrLAB6xkr+Mi7pIzOEFYAaezRhpNqhvThX1TjTbKmn3rcTbU6gsgNkQxJBk7SFWAMWYyhlpaE2VN8pxCR9wW/qY+rvzsvtWYpUvqrhDh/06HYLbzg6wco7siH9Eswx5lK1SQFVl9HRgkbzLBJ9WC/VsGyIoTuX8aWZZDE0EXAyzLQ3e3K/yom52+MdD94rzbLmi3Aiv3Urtdiv2H8zfvZIkyw5+HD9SYDw9m+smokESgK4kS92mdRdn/0w4MQAc31rC+ycAUDAAqlTfQNDDQoCfkG5C5PpofsHqXcuxExy+cYSRcT4X/RXa9Pn5j20JEQGZW0U0BPABd9o73QDD8DaR83rb2rMvSKWs07onDT4tLyOkrKJP+0wAWqhqwfE662j3W1JVNi7bDDG7yZHeKtBa49/hGIQOQI1S5tt5inx5kQN1oGCmG5jkCEiroF8UX2EWrpQtHFS0nve+n1qSpq/2E6u2A+n8ScDrHPRVxHAvznPGnMsBU+PUMEFTz+Q2+kNfILraZhOOM4u2nrqyKmp3ZWWjQYl1SXtkbeFpkqqF34z5+A/xCruKD08s7CirbHe0mMiWmIraSnG/bREI5wizz+RdRAOfoUHLYo0170wdayJL4tYYlg2xrIAfuKlead1lHtuOV5gQsBazAer3WTBMvh5c2Q31ldXxUAAdW1v21QDFKXO1p0eFvrXDBwqCems+z8OFge6wMQIFgP6nCIOMQP+zuX8FP0U8N32lHhxNvbbjptu6Tpcg56M2gD2Ia4TT/wWGu6gko2EvCZYruJb09PwOHVuR7vKAj7KYuQaRjZ0tasuhG4mtaOBVtEhlD9trWTEqyP20hTaJt54SV/9lL3Kd7OrT/AeskHcRoZ1arxdKbohOjqTck2YRxsZNGjed1Lw4leYehn3rg1Lx+FGAE=",
+          "thinking": "I'm noticing 32 payments in May that were loaded outside the normal batches, which could be duplicates, though May was a low month so it likely doesn't explain June. I'll mention the quick check as optional, and also check whether the post-June rise holds up given May's drop was small.\n\n",
+          "type": "thinking"
+        },
+        {
+          "id": "toolu_01XiymKNB6dfLphTgh4HZsyA",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(avg(inc) FILTER (WHERE cause='collision')) collision_avg, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01XiymKNB6dfLphTgh4HZsyA",
+          "content": "{\"columns\": [\"from_june\", \"claims\", \"avg_cost\", \"collision_avg\", \"median_cost\"], \"rows\": [[false, 295, 7873.0, 8663.0, 5525.0], [true, 223, 11992.0, 13027.0, 9051.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_01EKLTTCWY6X9yphqa2VA3Zp",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_over_15k FROM s GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01EKLTTCWY6X9yphqa2VA3Zp",
+          "content": "{\"columns\": [\"from_june\", \"claims\", \"avg_cost\", \"median_cost\", \"pct_over_15k\"], \"rows\": [[false, 152, 8663.0, 6654.0, 17.1], [true, 121, 13027.0, 9762.0, 30.6]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "id": "toolu_0158fmbuEBefF3VkgPU54dfd",
+          "input": {
+            "sql": "WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01')\nSELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1"
+          },
+          "name": "run_sql",
+          "type": "tool_use",
+          "caller": {
+            "type": "direct"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_0158fmbuEBefF3VkgPU54dfd",
+          "content": "{\"columns\": [\"from_june\", \"claims\", \"avg_cost\", \"median_cost\"], \"rows\": [[false, 295, 7873.0, 5525.0], [true, 223, 11992.0, 9051.0]], \"truncated\": false}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "{\"status\":\"answered\",\"question_type\":\"why\",\"interpretation\":\"Average claim cost is incurred (paid plus open reserve) divided by claim count, by loss date. It covers NSW motor claims. I compared Jan\u2013May 2026 with Jun\u2013Aug 2026. September is left out because it is incomplete (about 79% reported). The monthly series is noisy, so I used these two multi-month blocks.\",\"answer\":\"The rise is real. NSW motor average cost was about $7,873 per claim for Jan\u2013May 2026 and about $11,992 for Jun\u2013Aug, up roughly 52%. The median rose too, from $5,525 to $9,051, so a few large claims don't explain it. The rise is mainly in collision claims, which averaged $8,663 before June and $13,027 from June. The share of collision claims above $15k went from 17.1% to 30.6%. The increase shows up across every repair shop, most adjusters, all channels and all metros, so no single shop, adjuster or location explains it. No NSW weather event is recorded for the period. Theft claims were also expensive in August (average about $36.6k), which pushed that month's average to $14.3k. I can't tell from the data why collision repairs got dearer. Plausible causes are higher repair costs or a change in the type of loss, and the data here can't separate them. September's average fell back to $6,978, but that month is incomplete.\",\"answer_sql\":\"WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1\",\"findings\":[{\"claim\":\"NSW motor average and median incurred cost were higher for Jun\u2013Aug 2026 than for Jan\u2013May 2026.\",\"evidence_sql\":\"WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost FROM s GROUP BY 1 ORDER BY 1\",\"key_numbers\":[{\"label\":\"Avg cost Jan\u2013May\",\"value\":7873,\"unit\":\"AUD\",\"column\":\"avg_cost\",\"row\":\"from_june = false\"},{\"label\":\"Avg cost Jun\u2013Aug\",\"value\":11992,\"unit\":\"AUD\",\"column\":\"avg_cost\",\"row\":\"from_june = true\"},{\"label\":\"Median Jan\u2013May\",\"value\":5525,\"unit\":\"AUD\",\"column\":\"median_cost\",\"row\":\"from_june = false\"},{\"label\":\"Median Jun\u2013Aug\",\"value\":9051,\"unit\":\"AUD\",\"column\":\"median_cost\",\"row\":\"from_june = true\"}],\"confidence\":\"high\"},{\"claim\":\"Collision claims drive the rise, with more of them above $15k.\",\"evidence_sql\":\"WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND cause='collision' AND loss_date>='2026-01-01' AND loss_date<'2026-09-01') SELECT loss_date>='2026-06-01' AS from_june, count(*) claims, round(avg(inc)) avg_cost, round(median(inc)) median_cost, round(100.0*count(*) FILTER (WHERE inc>15000)/count(*),1) pct_over_15k FROM s GROUP BY 1 ORDER BY 1\",\"key_numbers\":[{\"label\":\"Collision avg Jan\u2013May\",\"value\":8663,\"unit\":\"AUD\",\"column\":\"avg_cost\",\"row\":\"from_june = false\"},{\"label\":\"Collision avg Jun\u2013Aug\",\"value\":13027,\"unit\":\"AUD\",\"column\":\"avg_cost\",\"row\":\"from_june = true\"},{\"label\":\"Share over $15k Jan\u2013May\",\"value\":17.1,\"unit\":\"%\",\"column\":\"pct_over_15k\",\"row\":\"from_june = false\"},{\"label\":\"Share over $15k Jun\u2013Aug\",\"value\":30.6,\"unit\":\"%\",\"column\":\"pct_over_15k\",\"row\":\"from_june = true\"}],\"confidence\":\"high\"}],\"hypotheses\":[{\"hypothesis\":\"Weather event (e.g. hail)\",\"verdict\":\"ruled_out\",\"evidence\":\"weather_events has no NSW events ending after 1 April 2026, and storm claims are only 4\u20137 per month.\"},{\"hypothesis\":\"A particular repair shop\",\"verdict\":\"ruled_out\",\"evidence\":\"Collision averages rose at all six shops (e.g. RS-001 $8.9k to $13.0k, RS-003 $7.0k to $11.9k). RS-006 is the highest at $22.3k but has only 8 claims.\"},{\"hypothesis\":\"A particular adjuster, channel or metro\",\"verdict\":\"ruled_out\",\"evidence\":\"Collision averages rose in 8 of 9 adjusters (ADJ-005 fell), in all three channels and in all three metros.\"},{\"hypothesis\":\"Mix shift towards costlier causes\",\"verdict\":\"inconclusive\",\"evidence\":\"Collision is still the largest cause, and its own average rose. Theft was very high in August ($36.6k) but is a small group.\"},{\"hypothesis\":\"Data problem (duplicates, incomplete month)\",\"verdict\":\"ruled_out\",\"evidence\":\"No duplicate claim rows. The 32 payments loaded outside nightly batches fall in May, which was a low month. September is incomplete and was excluded.\"},{\"hypothesis\":\"General repair cost inflation or more severe collisions\",\"verdict\":\"inconclusive\",\"evidence\":\"This fits the broad-based rise, but the warehouse has no repair-cost or severity-driver data to confirm it.\"}],\"data_quality_issues\":[{\"issue\":\"Latest month (Sep 2026) is only about 79% reported, and reserves on open claims are estimates.\",\"impact\":\"September was excluded from the comparison. The 3 open collision claims in Jun\u2013Aug carry reserves, so the averages may still change.\"},{\"issue\":\"32 NSW motor payments in May 2026 were loaded outside the nightly batches.\",\"impact\":\"May was a low-cost month, so this doesn't explain the June rise, but it is worth checking.\"}],\"charts\":[{\"title\":\"NSW motor average claim cost by loss month\",\"sql\":\"WITH s AS (SELECT c.*, coalesce(pay.paid,0)+c.reserve_amount AS inc FROM claims c LEFT JOIN (SELECT claim_id,sum(amount) paid FROM claim_payments GROUP BY 1) pay USING(claim_id) WHERE c.product='motor' AND c.state='NSW' AND loss_date>='2026-01-01') SELECT strftime(loss_date,'%Y-%m') AS month, round(avg(inc)) AS avg_cost FROM s GROUP BY 1 ORDER BY 1\",\"type\":\"line\",\"x\":\"month\",\"y\":\"avg_cost\"}],\"proposed_actions\":[{\"type\":\"ticket\",\"title\":\"Review NSW motor collision repair costs since June 2026\",\"reason\":\"Collision costs rose broadly across shops and adjusters. Someone should check repair rates and supplier pricing, and look at the large August theft claims.\"},{\"type\":\"ticket\",\"title\":\"Check the 32 off-batch payment loads in May 2026\",\"reason\":\"Payments loaded outside the nightly batches can distort paid amounts.\"}],\"open_questions\":[]}",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

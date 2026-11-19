@@ -84,11 +84,11 @@ These are the questions users ask most. They become the first test cases, and ea
 
 ## 6. Constraints
 
-- **Budget:** at most A$50 of API spend for the whole project, about US$34.60 (the Claude API bills in US dollars); it was US$200 until 2026-10-18. The agent runs on Claude Sonnet 5.5.
+- **Budget:** at most A$50 of API spend for the whole project, about US$34.60 (the Claude API bills in US dollars); it was US$200 until 2026-10-18. A$10 more was added on 2026-11-17 to test the fixes from a review of the published project. The agent runs on Claude Sonnet 5.5.
 - **Data:** no real data. A seeded script generates the warehouse and plants known incidents in it. The policy library and the 27 claim files are fictional too.
 - **Access:** read-only. The agent never changes data, and actions such as tickets need a human's approval.
-- **Privacy:** personal data (names and emails) is visible only to the fraud team role.
-- **Delivery:** the demo runs locally. The code will be on GitHub, and a detailed README will be written before it's public.
+- **Privacy:** personal data (names and emails) is visible only to the fraud team role. Names, emails and phone numbers that staff write into claim notes are masked for the other roles (added 2026-11-17).
+- **Delivery:** the demo runs locally with `make demo`, and the code is public on GitHub with a detailed README. A hosted copy of the guided demo, without an API key, was added after v1 (2026-11-16).
 - **Timeline:** no fixed deadline.
 
 ## 7. Scope for v1
@@ -109,7 +109,7 @@ These are the questions users ask most. They become the first test cases, and ea
 - Home insurance policies (the policy library covers claims handling and motor cover)
 - Scheduled monitoring and automatic alerts
 - Slack, Jira or email integrations
-- A hosted online version
+- A hosted version where visitors ask their own questions live (the hosted guided demo added on 2026-11-16 shows saved answers only, so it costs nothing to run)
 
 ## 8. Assumptions
 

@@ -11,7 +11,9 @@ A session holds a set number of questions (10 by default), so its conversation, 
 of each question, can't grow without end; after that the user starts a new one.
 
 Every question has caps on tool calls and cost. Near the tool-call cap the model is asked to
-write its report with what it has; past the hard caps the question ends with an error.
+write its report with what it has; past the hard caps the question ends with an error. A call
+that repeats an earlier one in the same question, with the same input, isn't run again: the
+model gets the earlier result back.
 
 Before a report goes out, code re-runs each finding's SQL and checks that its key numbers are
 in the result (agent/key_numbers.py). Numbers it can't confirm go back to the model once, to
@@ -46,8 +48,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from mcp_servers.warehouse import Limits as QueryLimits
-from mcp_servers.warehouse import run_query
+from mcp_servers.warehouse import reads_no_table, run_query
 from mcp_servers.warehouse.access import warehouse_for
+from mcp_servers.warehouse.masking import Masker
 
 from . import __version__
 from .compliance import ComplianceToolbox, ReviewConfig
@@ -70,6 +73,16 @@ from .tracing import Tracer, langfuse_client
 DEFAULT_WAREHOUSE = Path("data/dev.duckdb")
 DEFAULT_POLICY_KB = Path("data/policies.duckdb")
 END_NOTE = "The session ended: anything not approved by then was dropped, so it wasn't sent."
+# Saved runs showed the model re-running an identical call turn after turn: 181 of 517 calls,
+# in half the questions, repeated an earlier one (docs/results.md). Refusing a repeat made the
+# model change the query trivially to run it anyway (2026-11-17), so a repeat gets the earlier
+# result again, without running it.
+REPEAT_NOTE = ("This exact call already ran in this question, and the data hasn't changed, so "
+               "here is the same result again. There's no need to re-run a query to check it: "
+               "code re-runs every finding's evidence_sql before the answer goes out.\n\n")
+TABLELESS_NOTE = ("Not run: this query reads no warehouse table, so its result shows nothing "
+                  "about the data. An answer from policy clauses needs no query (answer_sql "
+                  "null, evidence_sql empty), and values you already have don't need restating.")
 # The number check needs every row, to compare column totals; the model never sees these rows.
 CHECK_LIMITS = QueryLimits(max_rows=10_000, max_chars=10_000_000)
 
@@ -84,6 +97,7 @@ class Limits:
     hard_tool_calls: int = 24  # past this, the question ends with an error
     max_cost_usd: float = 0.50  # per question (DEV_PLAN.md success criteria)
     number_repairs: int = 1  # times a report's unconfirmed key numbers go back to the model
+    max_repeats: int = 3  # repeated calls, after which the model is asked to write its report
 
 
 @dataclass(frozen=True)
@@ -163,12 +177,13 @@ def repair_request(unconfirmed: list[dict]) -> str:
     lines = [f"- Finding {item['finding'] + 1}, {item['label']}: {item['value']} "
              f"{item['unit'] or ''}".rstrip() + f". {item['reason']}" for item in unconfirmed]
     return (
-        "Code re-ran each finding's evidence_sql and couldn't confirm these key numbers in its "
-        "result (a value, or a column's total or average, allowing for rounding):\n"
+        "Code re-ran each finding's evidence_sql and couldn't confirm these key numbers in the "
+        "cell each one names (its column and row, or the column's total or average, allowing "
+        "for rounding):\n"
         + "\n".join(lines)
-        + "\n\nFor each one, change that finding's evidence_sql so its result contains the "
-        "number, or correct or remove the number. You may run queries. Then write the whole "
-        "report again."
+        + "\n\nFor each one, correct the cell it names, change that finding's evidence_sql so "
+        "the cell holds the number, or correct or remove the number. You may run queries. "
+        "Then write the whole report again."
     )
 
 
@@ -227,6 +242,25 @@ def build_graph(
         calls = [b for b in state["messages"][-1]["content"] if b["type"] == "tool_use"]
         done, results, model_calls = list(state["tool_calls"]), [], list(state["model_calls"])
         for call in calls:
+            earlier = (_earlier_result(state["messages"], results, call)
+                       if any(_same_call(call, made) for made in done) else None)
+            if earlier is not None:
+                # A read-only snapshot gives the same result again, so the call isn't run.
+                record = {"tool": call["name"], "input": call["input"], "repeat": True}
+                done.append(record)
+                tracer.event("tool_call", run_id=state["run_id"], **record)
+                results.append({"type": "tool_result", "tool_use_id": call["id"],
+                                "content": REPEAT_NOTE + earlier["content"],
+                                "is_error": earlier.get("is_error", False)})
+                continue
+            if call["name"] == "run_sql" and reads_no_table(call["input"].get("sql", "")):
+                # Placeholders such as SELECT 1, written to give a policy answer a query.
+                record = {"tool": call["name"], "input": call["input"], "error": TABLELESS_NOTE}
+                done.append(record)
+                tracer.event("tool_call", run_id=state["run_id"], **record)
+                results.append({"type": "tool_result", "tool_use_id": call["id"],
+                                "content": TABLELESS_NOTE, "is_error": True})
+                continue
             with tracer.span(call["name"], as_type="tool", input=call["input"]) as span:
                 outcome = toolbox.call(call["name"], call["input"], state["run_id"])
                 kept = ("source", "rows", "truncated", "error")  # no result rows leave the machine
@@ -242,11 +276,16 @@ def build_graph(
             tracer.event("tool_call", run_id=state["run_id"], **record)
             results.append({"type": "tool_result", "tool_use_id": call["id"],
                             "content": outcome.content, "is_error": outcome.is_error})
+        # A text block after the tool results, in the same user message.
         if len(done) >= limits.max_tool_calls:
-            # A text block after the tool results, in the same user message.
             results.append({"type": "text", "text": (
                 "You've used this question's query budget. Write the report now with what "
                 "you have, and note anything you couldn't check."
+            )})
+        elif sum(record.get("repeat", False) for record in done) >= limits.max_repeats:
+            results.append({"type": "text", "text": (
+                "You've asked again for results you already have. Write the report now with "
+                "what you have."
             )})
         return {"messages": [{"role": "user", "content": results}], "tool_calls": done,
                 "model_calls": model_calls}
@@ -369,6 +408,32 @@ def _fail(error: str) -> dict:
     return {"outcome": {"report": None, "error": error}, "stop_reason": None}
 
 
+def _same_call(call: dict, earlier: dict) -> bool:
+    """Whether a tool call repeats one made earlier in this question, with the same input."""
+    return earlier["tool"] == call["name"] and (
+        json.dumps(earlier["input"], sort_keys=True) == json.dumps(call["input"], sort_keys=True))
+
+
+def _earlier_result(messages: list[dict], results: list[dict], call: dict) -> dict | None:
+    """The tool_result block an earlier identical call got, in this turn or an earlier one,
+    or None if there's none with text content to hand back."""
+    returned = {block["tool_use_id"]: block
+                for message in messages if message["role"] == "user"
+                and isinstance(message["content"], list)
+                for block in message["content"] if block.get("type") == "tool_result"}
+    returned |= {block["tool_use_id"]: block for block in results}
+    for message in reversed(messages):
+        if message["role"] != "assistant":
+            continue
+        for block in message["content"]:
+            if (block.get("type") == "tool_use" and block["id"] != call["id"]
+                    and block["id"] in returned
+                    and isinstance(returned[block["id"]].get("content"), str)
+                    and _same_call(call, {"tool": block["name"], "input": block["input"]})):
+                return returned[block["id"]]
+    return None
+
+
 class Session:
     """One user's conversation. Ask a question, then follow-ups in the same session.
 
@@ -416,8 +481,10 @@ class Session:
         self.toolbox = ToolBelt(boxes)
         self.version = f"{__version__}+" + fingerprint(
             self.system, self.toolbox.definitions, REPORT_SCHEMA, settings.model, settings.effort)
-        self.tracer = Tracer(self.session_id, purpose, trace_dir,
-                             langfuse if langfuse is not None else langfuse_client())
+        langfuse = langfuse if langfuse is not None else langfuse_client()
+        # What goes to Langfuse has policyholders' names and contact details masked.
+        masker = Masker.from_warehouse(self.config.warehouse) if langfuse is not None else None
+        self.tracer = Tracer(self.session_id, purpose, trace_dir, langfuse, masker)
         self.tracer.event("session_start", role=role, version=self.version,
                           model=settings.model, effort=settings.effort,
                           toolset=self.config.toolset, tools=self.toolbox.names,
@@ -430,7 +497,12 @@ class Session:
     def _check_numbers(self, report: dict) -> dict:
         """The report's key numbers against their findings' SQL, run as this role."""
         warehouse = warehouse_for(self.role, self.config.warehouse)
-        return check_numbers(report, lambda sql: run_query(warehouse, sql, CHECK_LIMITS).rows)
+
+        def result_for(sql: str):
+            result = run_query(warehouse, sql, CHECK_LIMITS)
+            return result.columns, result.rows
+
+        return check_numbers(report, result_for)
 
     def _checkpointer(self):
         if self.config.checkpoints is None:

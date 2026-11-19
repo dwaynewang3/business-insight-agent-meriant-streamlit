@@ -14,6 +14,8 @@ Meridian's claims leaders have dashboards that show *what* changed, such as a lo
 
 The agent answers in minutes, shows the SQL and clauses behind every statement, says when the data can't be trusted, and never writes to anything without a person's approval. Because the data is generated with planted incidents and an answer key, every answer can be checked against a known truth.
 
+At the measured US$0.12 and about a minute for a "why" question, a hundred "why" questions a month cost about US$12 in API usage, against days each in an analyst's queue. The value is in those analyst days and the faster decisions, and the [rollout plan](docs/rollout_plan.md) measures it while analysts review every answer.
+
 ## Results at a glance
 
 The final agent's results. The "what" and "why" questions ran once each, on held-out test data that nothing was tuned on:
@@ -23,7 +25,7 @@ The final agent's results. The "what" and "why" questions ran once each, on held
 | 22 "what" questions | **22/22** correct (95% range 85–100%), US$0.06 and 23 s a question |
 | 7 "why" questions, one with a cause the agent's instructions don't name | **7/7** right cause (65–100%), US$0.12 and 51 s a question |
 | Compliance review of 27 claim files (9 held out) | **27/27** verdicts and 22/22 required findings, US$0.03 a claim |
-| 14 safety cases (development data): writes, file reads, personal data, hidden instructions | **14/14** |
+| 15 safety cases (development data): writes, file reads, personal data, hidden instructions | **15/15** |
 | The LLM grader against 56 answers labeled by hand | **56/56** agree, including all 7 failures |
 
 The samples are small and each question ran once, so the ranges are wide. [Final results](#final-results-held-out-test-data-2026-10-19) has the details and [Limitations](#limitations) what they don't show.
@@ -55,8 +57,8 @@ flowchart LR
     A -.-> T["Traces: local files + Langfuse"]
 ```
 
-- **The agent** ([agent/graph.py](agent/graph.py)) is a LangGraph loop that calls Claude Sonnet 5.5 through the Anthropic SDK, runs the tools it asks for, and ends with a structured report: how it read the question, the answer, the SQL behind it, the evidence for each finding, the explanations it tested, data-quality issues and proposed actions. Before the answer goes out, code re-runs each finding's SQL and checks that every key number is in its result; numbers it can't find go back to Claude once, to fix the query or the number, and any still unconfirmed are marked in the answer. A conversation holds 10 questions, so it can't grow slow and costly.
-- **The warehouse MCP server** ([mcp_servers/warehouse/](mcp_servers/warehouse/)) has six read-only tools: `search_catalog`, `describe_table`, `get_metric`, `query_metric` (the agreed definitions), `run_sql` and `check_data_quality`. The app starts one server per session with the user's role, so the model can't change it. Every role except the fraud team lead connects to a copy of the warehouse without names or email addresses, so personal data can't leak even if a query gets past every other check.
+- **The agent** ([agent/graph.py](agent/graph.py)) is a LangGraph loop that calls Claude Sonnet 5.5 through the Anthropic SDK, runs the tools it asks for, and ends with a structured report: how it read the question, the answer, the SQL behind it, the evidence for each finding, the explanations it tested, data-quality issues and proposed actions. Each key number names the cell it comes from, its column and row ("state = NSW"). Before the answer goes out, code re-runs each finding's SQL and checks every key number against its own cell, so a real number put on the wrong row isn't confirmed. Numbers it can't confirm go back to Claude once, to fix the query, the cell or the number, and any still unconfirmed are marked in the answer. A tool call that repeats an earlier one in the same question gets the earlier result back without running, and a query that reads no table, a placeholder such as `SELECT 1`, isn't run and can't back a key number. A conversation holds 10 questions, so it can't grow slow and costly.
+- **The warehouse MCP server** ([mcp_servers/warehouse/](mcp_servers/warehouse/)) has six read-only tools: `search_catalog`, `describe_table`, `get_metric`, `query_metric` (the agreed definitions), `run_sql` and `check_data_quality`. The app starts one server per session with the user's role, so the model can't change it. Every role except the fraud team lead connects to a copy of the warehouse without names or email addresses, so personal data can't leak even if a query gets past every other check. In that copy, the names, email addresses and phone numbers that staff write into claim notes are masked too ([masking.py](mcp_servers/warehouse/masking.py)).
 - **The policies MCP server** ([mcp_servers/policies/](mcp_servers/policies/)) searches Meridian's 8 internal policies (252 clauses) with hybrid search: local embeddings and BM25, fused by rank. It returns only the clause versions in force on the date that matters (the incident date for cover and settlement, the decision date for procedures). Every policy statement in an answer cites a clause, and code checks each citation against the clauses the tools returned.
 - **Compliance review** ([agent/compliance.py](agent/compliance.py)) judges one claim file against the policies in a structured-output call, then checks every finding in code: each cited clause must have been supplied, and each piece of evidence must match the claim file. Code, not the model, aggregates the verdict. Three designs were measured; full context (the whole library in one cached prompt) beat checklist RAG, at half the cost ([results](docs/compliance_results.md)).
 - **The SQL guard** ([sql_guard.py](mcp_servers/warehouse/sql_guard.py)) allows exactly one `SELECT` per query, on a read-only connection that can't read files or load extensions, with a time limit and size caps.
@@ -68,13 +70,27 @@ Every answer can be traced to the calls behind it ([agent/tracing.py](agent/trac
 
 - **Local traces:** every question, Claude call, tool call, answer and approval decision goes to one file per session in `logs/traces/`. Each line carries the session ID, the question's run ID and an agent version, which is a hash of the prompt, tools, report schema, model and effort. An answer or an eval result can therefore be traced to the exact setup that produced it.
 - **Langfuse**, when its keys are in `.env`: one trace per question, grouped by session. Each Claude call is recorded with its tokens and cost, and each tool call with its input and the number of rows that came back. An approval decision is its own trace in the same session, linked to its question by the run ID, so it shows who approved which ticket or alert.
-- **What stays on the machine:** query result rows are never sent to Langfuse; a tool call is recorded with its input and a row count only. The question, the answer's text and its SQL are sent, so an answer that names a policyholder, which only the fraud team lead can get, would carry that name. Masking names there isn't built.
+- **What stays on the machine:** query result rows are never sent to Langfuse; a tool call is recorded with its input and a row count only. The question, the answer's text and its SQL are sent, with policyholders' names, email addresses and phone numbers masked first, so a fraud team lead's answer that names a policyholder reaches Langfuse as "[name]". The local trace keeps the full text.
 - **Cost:** code computes it from each response's token counts, including cache reads and writes, and records every call in a spend ledger that stops the agent at a set limit.
 - **Feedback:** in live mode each answer can be rated, thumbs up or down, with a note on what was wrong. Ratings go to the session's trace, to `logs/feedback.jsonl` and to the question's Langfuse trace as a score. The answers rated down are the ones to review, and where new eval cases come from.
 
 One question in Langfuse. The selected `run_sql` step shows the SQL that went in and, as output, only how many rows came back:
 
 ![A Langfuse trace of the New South Wales question: 43 seconds, US$0.113 and 97k tokens, with each Claude call and tool call in order. The selected run_sql step shows its SQL as input and, as output, that 4 rows came back](docs/images/langfuse-trace.png)
+
+## Taking it to another customer
+
+The agent's core stays the same from one customer to the next; what changes sits behind clear seams:
+
+| Stays the same | Changes per customer |
+| --- | --- |
+| The loop, the report and its checks: key numbers against their cells, citations against returned clauses, verdicts aggregated in code | The warehouse MCP server's connection: a read-only service account on Snowflake, BigQuery or Databricks instead of DuckDB |
+| The SQL guard's rule of one read-only `SELECT`, and the approval step before any write | Access: warehouse roles or masking policies mapped from single sign-on, in place of the copy without personal data |
+| Tracing, cost caps and the spend ledger | The semantic layer: the customer's own metric definitions (for example dbt MetricFlow), signed off by finance and actuarial |
+| The eval runners, graders and the rule that held-out data is scored once | The eval cases: 50–100 of the customer's real questions, answered by their analysts, and their own policy library |
+| | The actions server's target: Jira or ServiceNow instead of GitHub issues |
+
+So onboarding is mostly connection, access and evaluation work, in that order, before anyone outside the project team sees an answer. The [rollout plan](docs/rollout_plan.md) has the stages and the exit criteria for each.
 
 ## Tech stack
 
@@ -175,6 +191,7 @@ After steps 1 to 3 of [Try the demo](#try-the-demo):
 ```bash
 make data                # builds the demo warehouse and the policy knowledge base
 make test-data           # builds the held-out test warehouse
+make stress-data         # builds the stress warehouse for the harder "why" questions
 make test                # runs the offline test suite (no API calls)
 ```
 
@@ -202,7 +219,7 @@ There's no real customer data. A seeded generator ([data/generator/](data/genera
 | `policyholders` | Customers, including personal data (names, emails) |
 | `policies` | Motor and home policies, with state, region, metro, postcode, channel, premium, excess and dates |
 | `exposure_monthly` | Policies in force and earned premium per month, state and product |
-| `claims` | Claims with cause, dates, status, adjuster, repair shop, open reserve and notes |
+| `claims` | Claims with cause, dates, status, adjuster, repair shop, open reserve and notes, some of which hold the policyholder's name and phone or email, as real notes do |
 | `claim_payments` | Payments on each claim, with the nightly load batch they arrived in |
 | `adjusters` | Claims adjusters by region, with hire and leave dates |
 | `repair_shops` | Motor repair shops by state and metro |
@@ -220,7 +237,7 @@ The agent doesn't guess what "loss ratio" or "average claim cost" means. Every m
 
 ## Evaluation
 
-The agent is tested on questions with known answers: 84 "what" and 16 "why" questions on the development data, 14 safety cases, 5 follow-ups, 27 claim files for compliance review, and a held-out test set of 22 "what" and 7 "why" questions, written before any run and scored once.
+The agent is tested on questions with known answers: 84 "what" and 16 "why" questions on the development data, 15 safety cases, 5 follow-ups, 16 routing questions, 27 claim files for compliance review, and a held-out test set of 22 "what" and 7 "why" questions, written before any run and scored once. A stress set of 3 harder "why" questions has its own data (below).
 
 - **"What" answers** are graded by re-running the SQL the agent says produced the answer and comparing its result with reference SQL written by hand. Numbers in the answer's text are never trusted.
 - **"Why" answers** must name the answer key's evidence, such as the storm's ID, which code checks. An LLM grader (Claude Opus 5.5) then judges whether the explanation is right and free of invented causes; it agreed with 56 of 56 answers labeled by hand.
@@ -228,6 +245,45 @@ The agent is tested on questions with known answers: 84 "what" and 16 "why" ques
 - **Every result** is a count with its 95% range, and every runner checks its grader and its cost limit before the first paid call.
 
 [Evaluation](docs/evaluation.md) has every kind of case, how each grader works and the commands to run them.
+
+### Testing the checks themselves
+
+A check that never fails proves little, so the key-number check was attacked ([number_check_attack.py](evals/number_check_attack.py), no API calls). Every key number in the held-out answers was made wrong on purpose, then checked:
+
+| Attack on the 129 held-out key numbers | Old check: anywhere in the result | New check: its own cell |
+| --- | --- | --- |
+| Value moved 10% (230 cases) | 16 confirmed (7%) | 0 |
+| Value moved 25% (230 cases) | 9 confirmed (4%) | 0 |
+| Value swapped with another row's, label kept (341 cases) | **341 confirmed (100%)** | 0 |
+
+The old check asked whether a number was anywhere in its query's result, so one state's figure reported as another's always passed. Each key number now names its cell, and all 119 numbers the old check confirmed are confirmed against their cells too. The attack assumes the agent names the right cell; a report that names the wrong one fails the check and goes back for repair. On the live agent since then (the routing, safety and stress runs below), it named a cell for all 71 of its key numbers, and the check confirmed all 71 without a repair.
+
+### Harder "why" questions: the stress set
+
+Most "why" cases have one clean cause, and the agent's instructions name six typical ones. The stress set ([its scenario](data/scenarios/stress.yaml), [its cases](evals/cases/stress/why.yaml)) is built on its own data, so the development data and the saved runs don't change:
+
+- **Two causes at once:** Victoria's payments jump in May because of a hailstorm's claims (about A$1.6 million) and a duplicate payment load (about A$0.9 million). Naming one isn't enough.
+- **No cause in the data:** New South Wales motor claims cost 40% more for three months, evenly across causes, shops, adjusters and channels. The right answer says the rise is real and the data can't say why.
+- **A change of definition:** home storm claims halve because the claims system starts recording part of them as a new cause, "hail".
+
+`make stress-data` builds it, and `uv run python -m evals.run_evals --kind why --suite stress` runs it. **Run once on the final agent: 3 of 3** (95% range 44–100%), judged by the LLM grader ([results](evals/results/20261117-235919-stress-why/summary.md)), US$0.13 a question. The agent named both causes with their amounts, said of the cost rise "I can't tell from the data why", and found the new "hail" code with storm and hail together about flat. Three questions, run once, show the agent can handle these cases, not how often it does.
+
+### Tool choice and repeated calls
+
+The routing eval asks 16 questions and checks which tools the agent picks: 14 of 16 right, against a target of 14 ([results](evals/results/20261018-113821-routing/summary.md)). One failure was a policy question ("What excess applies to drivers under 25?") that ran `SELECT 1200 AS additional_excess_aud` eight times: the agent was putting a number from a policy clause into a query, because its instructions said every number comes from a query, and then repeating it.
+
+Reading every saved transcript showed the repeats were general: **181 of 517 tool calls (35%), in 45 of 90 questions, repeated an earlier call with the same input**. The demo's expired-licence answer ran one identical query 11 times. Each repeat costs a model turn. The fix took three rounds, each measured on the routing questions, one run per question:
+
+| Routing questions | Calls | Cost | Right |
+| --- | --- | --- | --- |
+| Before (2026-10-18), the 13 questions round 1 covered | 71 | US$0.99 | 11 of 13 |
+| Round 1: a repeated call is refused; clause numbers are cited, not queried | 111 | US$1.32 | 12 of 13 |
+| Round 2: a repeat gets the earlier result back, and the agent is told code re-checks every finding's query | 76 | US$1.11 | 11 of 13 |
+| Round 3, all 16 ([results](evals/results/20261117-234828-routing-fix4/summary.md)): placeholder queries aren't run, and after three repeats the agent is asked to write its report | 89 (77 before) | US$1.25 (US$1.10 before) | **15 of 16** (14 before) |
+
+Round 1 made things worse: refused repeats made the agent change the query trivially, adding `1 AS n`, to run it anyway, apparently because it re-runs a finding's query to check it before reporting. Round 2 told it code does that check, and handed back the earlier result instead of refusing. Round 3 dealt with what was left on policy questions: placeholder queries such as `SELECT 1 WHERE false`, written because the report has SQL fields, which the agent now answers without running, and the report instructions now say a policy answer has no SQL.
+
+The final agent routes better than before, at about 14% more calls and cost, within what one or two questions can swing in a single run. The agent still asks for repeats about as often (24% of calls); they're answered from earlier results rather than run. One question, about rideshare drivers, still writes placeholder queries. Each run is one pass per question, so the comparison is rough.
 
 ### Final results (held-out test data, 2026-10-19)
 
@@ -251,7 +307,16 @@ Untraceable "what" numbers were mostly in one answer, whose evidence query didn'
 | 5 follow-ups | **5/5** (57–100%); 30/30 key numbers confirmed; $0.086 and 32 s (median) a question |
 | Key-number check | 41/41 key numbers confirmed across both runs; one answer was repaired (1 of 3 confirmed, then 3 of 3) |
 
-One run per question and small samples make the ranges wide; a second run would need budget the project didn't have (A$50 in all).
+**Re-measured after the review fixes (2026-11-17).** After key numbers began naming their cells, repeats were answered from earlier results, placeholder queries stopped running and claim notes gained contact details:
+
+| Measure | Result |
+| --- | --- |
+| 15 safety cases, including contact details in claim notes | **15/15** (80–100%); $0.027 a case ([results](evals/results/20261117-235601-final2-safety/summary.md)) |
+| 16 routing questions | **15/16**, against 14/16 before; 89 calls and US$1.25, against 77 and US$1.10 |
+| 3 stress "why" questions | **3/3** (44–100%); $0.13 a question |
+| Key-number check | 71/71 key numbers named their cell and were confirmed, with no repairs |
+
+One run per question and small samples make the ranges wide; a second run would need budget the project didn't have (A$50 in all, and A$10 more on 2026-11-17 to test the review fixes).
 
 **Earlier runs.** Development was measured on an earlier US version of the same data: all 84 "what" and 16 "why" questions, the semantic layer switched on and off (84/84 against 83/84), and one improvement round. Those runs, and the failure modes they showed, are in [docs/results.md](docs/results.md).
 
@@ -259,12 +324,14 @@ One run per question and small samples make the ranges wide; a second run would 
 
 - **The data is synthetic**, with planted incidents. The generator adds noise, seasonality, outliers and messy notes, but real claims data is messier.
 - **The agent's instructions name six typical causes** to test for "why" questions (an outside event, a change in the mix of business, an operational change, a vendor or member of staff, a data problem, seasonality or noise), and each one matches an incident in the development data. Scores on that data may therefore flatter the agent. The held-out test data includes one cause outside the list (early-claim fraud), and the agent found it, but that's a single case. With a real customer, the list would come from their own analysts.
-- **It sometimes does more work than asked:** on pure policy questions it can run SQL it doesn't need (11 queries for the expired-licence question in the demo), which costs time and money but doesn't change the answer.
+- **It repeated tool calls:** in the saved runs, 35% of tool calls repeated an earlier one with the same input, and policy answers ran queries such as `SELECT 1200` to restate a clause's number (the demo's expired-licence question ran one query 11 times). That cost time and money without changing answers. Repeats are now answered from earlier results and placeholder queries aren't run, but the agent still asks for repeats as often, and the final routing run cost about 14% more than before ([Tool choice and repeated calls](#tool-choice-and-repeated-calls)).
 - **The Agreed metric label is strict.** An answer that adds a number of its own, such as a claim count beside the agreed average, is labelled Custom query even when its main number is the agreed metric's. On the held-out "what" questions, 11 of 22 answers carry the label; the label was added after those runs and is worked out when an answer is shown, so it isn't part of the scores.
-- **Not every key number is always traceable:** before the agent checked its own numbers, 1% of key numbers in "what" answers and 6% in "why" answers (13% on the held-out "what" set) weren't in the result of the query attached to them. The agent now asks Claude once to fix any it can't confirm, and the UI marks those still unconfirmed as **(not confirmed)**; the held-out set hasn't been re-run with the check, since it's scored once.
+- **Not every key number is always traceable:** before the agent checked its own numbers, 1% of key numbers in "what" answers and 6% in "why" answers (13% on the held-out "what" set) weren't in the result of the query attached to them. The agent now asks Claude once to fix any it can't confirm, and the UI marks those still unconfirmed as **(not confirmed)**; the held-out set hasn't been re-run with the check, since it's scored once. Until 2026-11-17 a number counted as confirmed if it was anywhere in its query's result, so a figure on the wrong row passed ([Testing the checks themselves](#testing-the-checks-themselves)); the saved runs were checked that way.
 - **The eval samples are small**, so the 95% ranges are wide, and the held-out test data was scored with one run per question (22 "what", 7 "why").
 - **Compliance results come from one run per design** on 27 claim files, so the ranges are wide (full context 27/27, 88–100%; checklist RAG 25/27, 77–98%), and two of full context's three "false" breaches are debatable readings of the answer key ([details](docs/compliance_results.md)). Full context works because the policy library (about 25k tokens) fits in one cached prompt; a larger library would need retrieval.
-- **Names in traces aren't masked.** Langfuse never receives query result rows, but it does receive each question and answer, and a fraud team lead's answer can name a policyholder. With a customer, tracing would run inside their own environment ([rollout plan](docs/rollout_plan.md)).
+- **Masking finds only the names the warehouse holds.** Names in claim notes and in what goes to Langfuse are matched against the policyholder list, and emails and phone numbers by pattern. A name the warehouse doesn't hold, such as another driver's, would get through; that needs a named-entity model such as Microsoft Presidio. With a customer, tracing would also run inside their own environment ([rollout plan](docs/rollout_plan.md)).
+- **The final agent's "what" and "why" scores predate the changes of 2026-11-17.** The routing, safety and stress sets were re-run on the final agent, but the 84 "what" and 16 "why" development questions and the held-out set weren't. The held-out set is scored once, and the budget didn't cover the rest.
+- **The new safety case passed by declining:** asked for contact details from claim notes, the agent refused without querying, so the masked notes weren't read in that run. The offline tests check what a restricted role's queries return.
 - **The agent's model wasn't chosen by a comparison.** It was chosen on capability and budget ([Model choice](#model-choice)), so the results don't show whether a cheaper model would do as well or a larger one better.
 
 ## Project structure

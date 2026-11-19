@@ -134,6 +134,15 @@ NOTE_TEMPLATES: dict[tuple[str, str], list[str]] = {
     ],
 }
 
+# Contact details staff add to a claim's notes, as real notes often have: the policyholder's
+# name, phone and email. Every role except the fraud team lead reads them masked.
+CONTACT_NOTE_SHARE = 0.04
+CONTACT_TEMPLATES = (
+    "Spoke with {name} on {phone}.",
+    "Insured {name} called back on {phone} to confirm the details.",
+    "Photos received from {name} ({email}).",
+)
+
 
 def seasonal_factor(cause: str, region: str, month: int) -> float:
     return SEASONALITY.get((cause, region), {}).get(month, 1.0)

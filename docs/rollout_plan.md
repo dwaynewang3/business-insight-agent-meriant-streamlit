@@ -17,6 +17,21 @@ Moving from the demo to a customer's data is mostly connection and governance wo
 
 **Exit criteria:** the security review is signed off, the eval set built from real questions exists, and a baseline is measured on it.
 
+## Serving many users
+
+The demo serves one user at a time, and several of its parts would break first when a hundred analysts log in on a Monday morning:
+
+| Demo | Why it doesn't scale | At a customer |
+| --- | --- | --- |
+| One warehouse MCP server process per session, over stdio, with the role on its command line | A process per user, started on every new conversation | Shared MCP servers over HTTP behind the customer's gateway, taking the user and role from their single sign-on token on every call, never from the request body |
+| LangGraph checkpoints in a local SQLite file | One writer at a time, on one machine | Postgres checkpoints, so any app instance can resume a conversation or a paused approval |
+| A spend ledger in a local JSONL file | No lock, so two processes can both pass the limit; per machine, not per team | Spend recorded centrally, with limits per user, per team and per month, and an alert before each is reached |
+| The SDK's retries on rate-limit errors | Under load, every user's retries collide | A queue in front of the Claude API with a cap on concurrent questions, and the API's priority tier if the volume justifies it |
+| A 10-second timeout per query on DuckDB | A cloud warehouse bills by the work a query does, not only its time | Query cost limits on the warehouse role (such as Snowflake resource monitors), query tags per question for cost reporting, and the result-size caps as today |
+| Tool calls run one after another | Only about 13% of the agent's turns asked for more than one tool at once, so this matters less than it looks | Run a turn's tool calls concurrently; most latency is the model's turns, which repeated calls no longer add to |
+
+None of these changes the agent's loop, its checks or its tools, which is why they're left for the deployment rather than built into the demo.
+
 ## Stage 1: Shadow mode (about 4 weeks)
 
 The agent answers real questions in the background, and nobody sees its answers except the project team.

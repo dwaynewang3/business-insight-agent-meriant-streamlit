@@ -214,13 +214,13 @@ def show_report(report: dict | None, error: str | None, tool_calls: list[dict], 
                 # Each finding's own query supplies the exact value behind a rounded number,
                 # and shows which numbers it doesn't contain. A finding without SQL confirms
                 # nothing; a query that fails here can't say either way.
-                rows = None
+                result = None
                 if live_data and finding["key_numbers"]:
                     data = query(role, finding["evidence_sql"], warehouse) \
                         if finding.get("evidence_sql") else pd.DataFrame()
                     if isinstance(data, pd.DataFrame):
-                        rows = data.astype(object).values.tolist()
-                numbers = ", ".join(key_number_html(n, rows) for n in finding["key_numbers"])
+                        result = list(data.columns), data.astype(object).values.tolist()
+                numbers = ", ".join(key_number_html(n, result) for n in finding["key_numbers"])
                 source = label_for(finding.get("evidence_sql"))
                 st.markdown(f"- {markdown_text(finding['claim'], html_too=True)}"
                             + (f" ({numbers})" if numbers else "")

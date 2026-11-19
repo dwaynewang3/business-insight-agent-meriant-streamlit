@@ -55,7 +55,7 @@ def test_a_run_grades_each_case_and_saves_its_transcript(config, grader, tmp_pat
     right = CASES["what-loss-ratio-by-product-2025"]
     wrong = CASES["what-claim-count-total-2025-q4"]
     fake = FakeClaude(
-        reply(sql_call("SELECT 1 AS x"), stop_reason="tool_use"),
+        reply(sql_call("SELECT 1 AS x FROM warehouse_info"), stop_reason="tool_use"),
         reply(report(right.reference_sql[0])),
         reply(report("SELECT 12345 AS claims")),
     )
@@ -65,7 +65,7 @@ def test_a_run_grades_each_case_and_saves_its_transcript(config, grader, tmp_pat
     assert skipped == [] and version.startswith(f"{__version__}+")
     saved = json.loads((tmp_path / "cases" / f"{right.id}.json").read_text())
     assert saved["transcript"][0]["role"] == "user" and len(saved["transcript"]) == 4
-    assert saved["tool_calls"][0]["sql"] == "SELECT 1 AS x"
+    assert saved["tool_calls"][0]["sql"] == "SELECT 1 AS x FROM warehouse_info"
 
     summary = summarize("test", records, skipped, config.settings, version)
     assert summary["passed"] == 1 and summary["categories"] == {"pass": 1, "wrong_result": 1}
@@ -119,7 +119,8 @@ def test_a_follow_up_is_asked_in_the_same_session_and_graded(config, grader, tmp
 
 def test_each_case_records_how_many_key_numbers_its_sql_confirms(config, grader, tmp_path):
     body = json.loads(report()["text"])
-    body["findings"] = [{"claim": "c", "evidence_sql": "SELECT 7 AS n", "confidence": "high",
+    body["findings"] = [{"claim": "c", "evidence_sql": "SELECT 7 AS n FROM warehouse_info",
+                         "confidence": "high",
                          "key_numbers": [{"label": "n", "value": 7, "unit": "claims"},
                                          {"label": "m", "value": 9, "unit": "claims"}]}]
     # The agent asks once for the unconfirmed number to be fixed; here the model doesn't.
@@ -164,7 +165,7 @@ def test_a_saved_run_can_be_resummarized_with_its_llm_grades_and_no_api_calls(gu
                                                                               tmp_path):
     folder = tmp_path / "run"
     (folder / "cases").mkdir(parents=True)
-    answer = {"findings": [{"claim": "c", "evidence_sql": "SELECT 3 AS n",
+    answer = {"findings": [{"claim": "c", "evidence_sql": "SELECT 3 AS n FROM warehouse_info",
                             "key_numbers": [{"label": "n", "value": 3, "unit": "claims"}]}]}
     case_id = "why-motor-book-shrinking"
     (folder / "cases" / f"{case_id}.json").write_text(

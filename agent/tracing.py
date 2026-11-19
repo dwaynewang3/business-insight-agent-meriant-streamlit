@@ -10,7 +10,10 @@ our code computed) and a span for each tool call (its input and how many rows ca
 Each approval decision is its own trace in the same session, linked to its question by the
 run ID, with a span for each ticket or alert it created.
 Query result rows are not sent: they stay in the local trace. The question, the answer's text
-and its SQL are sent, so a name in a fraud team lead's answer isn't masked.
+and its SQL are sent, with policyholders' names, email addresses and phone numbers masked
+first (mcp_servers/warehouse/masking.py), so a fraud team lead's answer that names a
+policyholder doesn't leave the machine with the name in it. The local trace keeps the full
+text.
 
 A user's rating of an answer (thumbs up or down, with an optional note) is an event in the
 session's trace, a line in the feedback file beside the traces folder, and a score on the
@@ -28,11 +31,26 @@ from pathlib import Path
 TRACE_DIR = Path("logs/traces")
 
 
+# The fields of a Langfuse observation that can carry text from a question or an answer.
+MASKED_FIELDS = ("input", "output", "metadata", "status_message")
+
+
 class _NoSpan:
     """Stands in for a Langfuse observation when Langfuse isn't set up."""
 
     def update(self, **fields) -> None:
         pass
+
+
+class _Masked:
+    """A Langfuse observation whose text is masked before each update is sent."""
+
+    def __init__(self, observation, mask: Callable[[dict], dict]):
+        self._observation = observation
+        self._mask = mask
+
+    def update(self, **fields) -> None:
+        self._observation.update(**self._mask(fields))
 
 
 def langfuse_client():
@@ -48,13 +66,16 @@ def langfuse_client():
 
 class Tracer:
     def __init__(self, session_id: str, purpose: str = "dev", directory: Path | None = None,
-                 langfuse=None):
+                 langfuse=None, masker=None):
+        """masker: masks text before it goes to Langfuse (a masking.Masker); None sends it
+        as it is."""
         self.session_id = session_id
         self.purpose = purpose  # dev, eval or demo: what the spend was for
         self.path = (directory or TRACE_DIR) / f"{session_id}.jsonl"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.feedback_file = self.path.parent.parent / "feedback.jsonl"
         self.langfuse = langfuse
+        self.masker = masker
         self._root = None
         self._trace_ids: dict[str, str] = {}  # each question's Langfuse trace, for its score
         self.listeners: list[Callable[[dict], None]] = []  # such as the UI's live steps
@@ -76,9 +97,17 @@ class Tracer:
         with self.feedback_file.open("a") as out:
             out.write(json.dumps(entry, default=str) + "\n")
         if self.langfuse is not None and run_id in self._trace_ids:
+            comment = self.masker.mask(comment) if self.masker else comment
             self.langfuse.create_score(trace_id=self._trace_ids[run_id], name="user_feedback",
                                        value=int(helpful), data_type="BOOLEAN", comment=comment)
             self.langfuse.flush()
+
+    def masked(self, fields: dict) -> dict:
+        """An observation's fields with the text that could carry personal data masked."""
+        if self.masker is None:
+            return fields
+        return {key: self.masker.mask_data(value) if key in MASKED_FIELDS else value
+                for key, value in fields.items()}
 
     def question(self, run_id: str, question: str, role: str, version: str):
         """One Langfuse trace for one question, grouped with the rest of its session."""
@@ -98,13 +127,15 @@ class Tracer:
                                   tags=[self.purpose], trace_name=name,
                                   metadata={"run_id": run_id}):
             with self.langfuse.start_as_current_observation(
-                    name=name, as_type=as_type, input=input,
-                    metadata={"run_id": run_id, "role": role, **(metadata or {})}) as root:
+                    name=name, as_type=as_type, **self.masked({
+                        "input": input,
+                        "metadata": {"run_id": run_id, "role": role, **(metadata or {})}})
+                    ) as root:
                 self._root = root
                 if name == "question":
                     self._trace_ids[run_id] = root.trace_id
                 try:
-                    yield root
+                    yield _Masked(root, self.masked)
                 finally:
                     self._root = None
         self.langfuse.flush()
@@ -113,7 +144,13 @@ class Tracer:
         """A child of the current trace, or a stand-in when there's no trace."""
         if self._root is None:
             return nullcontext(_NoSpan())
-        return self._root.start_as_current_observation(name=name, as_type=as_type, **fields)
+        return self._masked_span(self._root.start_as_current_observation(
+            name=name, as_type=as_type, **self.masked(fields)))
+
+    @contextmanager
+    def _masked_span(self, observation):
+        with observation as span:
+            yield _Masked(span, self.masked)
 
     def close(self) -> None:
         if self.langfuse is not None:

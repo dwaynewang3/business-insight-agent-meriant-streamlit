@@ -99,6 +99,20 @@ def check_sql(sql: str) -> duckdb.Statement:
     return statements[0]
 
 
+def reads_no_table(sql: str) -> bool:
+    """Whether a query is a SELECT that reads no table, by DuckDB's own parser. `SELECT 1` and
+    `SELECT 638 AS claims` read none: their result shows nothing about the warehouse. Anything
+    that isn't a single SELECT the parser can read is False, and left to run_query to judge."""
+    try:
+        tree = json.loads(duckdb.connect().execute(
+            "SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
+    except (duckdb.Error, TypeError, ValueError):
+        return False
+    if tree.get("error") or len(tree.get("statements", [])) != 1:
+        return False
+    return '"type":"BASE_TABLE"' not in json.dumps(tree, separators=(",", ":"))
+
+
 def run_query(db_path: str | Path, sql: str, limits: Limits = DEFAULT_LIMITS) -> QueryResult:
     """Run one SELECT on a locked-down connection, and return capped, JSON-friendly rows."""
     statement = check_sql(sql)

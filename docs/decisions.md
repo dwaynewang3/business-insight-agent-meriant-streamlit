@@ -106,3 +106,31 @@ The choices that shaped the Business Insights Agent. Each one gives the alternat
 - **Why:** the work is multi-step tool use, which Sonnet 5.5 is strong at, for half of Opus 5.5's price. The whole project had A$50 of API spend, down from US$200 part-way through, and a model comparison would have used the budget the compliance comparison and the held-out scoring needed.
 - **Evidence:** at medium effort the agent met its accuracy, cost and speed targets on the held-out data, so the evals showed no failure for a larger model to fix. The one cheaper setting that was measured, the compliance judge at low effort, gave the same verdicts but invented a citation.
 - **The cost:** nothing shows whether a cheaper model would do as well. The budget also left one run per compliance design and one run per held-out question, so the ranges are wide. The eval runner takes `--model` and `--effort`, so the comparison is one command per arm.
+
+## 16. Each key number names its cell, and code checks that cell
+
+- **Instead of:** checking that a number is anywhere in its query's result, or having code fill in each value from a pointer the model gives.
+- **Why:** an attack on the old check showed it confirmed every one of 341 values swapped between rows, such as one state's count reported as another's. With the value and its cell both written by the model, code can check that they agree. Filling in the value from the pointer would remove that second check: a wrong pointer would quietly produce a wrong number.
+- **Evidence:** on the 129 held-out key numbers, swapped values confirmed fell from 341 of 341 to 0, and values moved 10% from 16 of 230 to 0, with every original number still confirmed ([number_check_attack.py](../evals/number_check_attack.py)).
+- **The cost:** the model has two more fields to fill, and a wrong cell sends a correct number back for repair. The row is one string ("state = NSW; month = 2026-07"): as a list of objects, it made the request's strict schemas too large for the API to compile, as the `citations` field did (decision 13).
+
+## 17. Repeated and placeholder queries are answered in code, not run
+
+- **Instead of:** a lower cap on tool calls, a prompt rule alone, or refusing repeats (tried first).
+- **Why:** the saved transcripts showed 181 of 517 tool calls repeating an earlier call with the same input, in half the questions, each costing a model turn, and policy answers running placeholder queries (`SELECT 1200`, `SELECT 1`) because the report has SQL fields. Now a repeat gets the earlier result back without running, the instructions say code re-checks every finding's query and a policy answer has no SQL, a query that reads no table isn't run and can't back a key number, and after three repeats the agent is asked to write its report.
+- **Evidence:** three measured rounds on the routing questions. Refusing repeats made things worse (111 calls instead of 71, a third more cost): the agent changed refused queries trivially, adding `1 AS n`, to run them anyway. The final design, on all 16: 15 of 16 right against 14, at 89 calls and US$1.25 against 77 and US$1.10.
+- **The cost:** the agent still asks for repeats about as often (24% of calls), so each still costs a model turn, and one policy question still writes placeholders. A table-function query such as `range(12)` reads no table and isn't run either.
+
+## 18. Personal data in free text is masked, in the warehouse copy and in traces
+
+- **Instead of:** leaving claim notes as they are, or a named-entity model such as Microsoft Presidio.
+- **Why:** removing columns protects names and emails stored in their own columns, but staff write names and numbers into notes. The generated notes had none, so the safety cases never tested the most realistic leak. Notes now carry contact details for about 4% of claims, and the copy without personal data masks them; the same masker cleans what tracing sends to Langfuse.
+- **Evidence:** offline tests over the whole dev warehouse; 15 of 15 safety cases on the final agent, though the new one passed by declining before reading any notes.
+- **The cost:** names are matched against the policyholder list, so a name the warehouse doesn't hold gets through. A named-entity model would catch more, at the price of a large dependency and its own false matches.
+
+## 19. Harder "why" questions get their own data
+
+- **Instead of:** planting the new incidents in the development data.
+- **Why:** the saved runs, the guided demo and the hosted copy re-run their SQL on the development data, so new incidents there would change numbers under answers already given. A separate scenario adds two causes at once, a real change with no cause in the data, and a change of definition.
+- **Evidence:** a rebuild of the development data matches the old one in all 13 tables, apart from the claim notes that decision 18 added.
+- **The cost:** a third warehouse to build. Its three questions passed once on the final agent, which shows they can be answered, not how often.

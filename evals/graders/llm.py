@@ -103,7 +103,9 @@ def _report_for_grading(report: dict) -> dict:
 
 
 def request_params(item: Item) -> dict:
-    kind = ("there's nothing to find" if item.case.nothing_to_find
+    kind = ("the change is real, but its cause isn't in the data"
+            if item.case.kind == "unexplained"
+            else "there's nothing to find" if item.case.nothing_to_find
             else "the answer key gives a cause")
     content = (
         f"Question: {item.case.question}\n\n"

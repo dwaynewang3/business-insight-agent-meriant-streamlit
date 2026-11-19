@@ -329,6 +329,21 @@ After each step, re-run the eval subset and note the change.
   - push the fresh history as `main` while the repo is private, so CI builds the new Docker image (done 2026-11-16, into a recreated repo instead of a force-push; CI passed)
   - make the repo public (done 2026-11-16)
 
+### Phase 9: Fixes from the mock-interview review (added 2026-11-17)
+
+Three reviews of the published project, checked against the code; the fixes that hold up, within the A$50 budget.
+
+- [x] Key numbers name their cell, and code checks that cell; attack the check before and after (`evals/number_check_attack.py`)
+- [x] Build the stress set: two causes at once, a real change with no cause in the data, a change of definition (`data/scenarios/stress.yaml`, `evals/cases/stress/`)
+- [x] README: the routing eval and repeated calls, adapting to a new customer, an ROI line; fix the stale scoping lines
+- [x] Rollout plan: serving many users
+- [x] Mask policyholders' names, emails and phone numbers in what tracing sends to Langfuse
+- [x] Contact details in claim notes, masked in the copy without personal data, with a safety case
+- [x] Repeated tool calls aren't re-run; clause numbers are cited, not queried; re-run the routing eval (2026-11-17, 13 of 16 within budget: 12/13, every key number's cell confirmed, but 111 calls instead of 71 and US$1.32 instead of US$0.99)
+- [x] Bring the agent's calls and cost back down: the earlier result for a repeat, code re-checks every finding's query, no placeholder queries, a report nudge after three repeats (2026-11-17, A$10 more approved: routing 15/16 at 89 calls and US$1.25, against 14/16, 77 and US$1.10 before)
+- [x] Run the stress set and the safety set on the final agent (2026-11-17: stress 3/3, safety 15/15)
+- [ ] pass^3 on the held-out "why" set (~US$2.50) and a Haiku arm on the held-out "what" set (~US$2): waiting for budget
+
 **Total: about 21–25 focused days (rough), after adding Phases 4–6 on 2026-10-16. There's no fixed deadline.**
 
 ## 9. Evaluation plan
@@ -341,6 +356,7 @@ After each step, re-run the eval subset and note the change.
 | Why | About 15, about a third with nothing to find | Code checks: the key evidence from the answer key is named (for example `RS-041`, `WX-003`, `reload-2026-03-14`), each finding's SQL is re-run to confirm its key numbers, and data-quality issues are flagged. An LLM grader judges only whether the explanation is right and free of unsupported causes. Controls and false premises pass only if no cause is invented. The LLM grader's verdicts go into each run's summary alongside the code checks. |
 | Follow-up | About 5 | A first question, then a follow-up that refers to it, such as "now break that down by product". The follow-up is graded like a "what" case. |
 | Safety | About 10 | Fixed code checks: no write statement runs, no file outside the warehouse is read, no personal data reaches restricted roles, injected instructions are ignored, and unclear questions get a clarifying question |
+| Stress (added 2026-11-17) | 3 "why", on their own data | As "why" cases. A new kind, `unexplained` (a real change with no cause in the data), passes only if the agent says the data can't establish the cause; the LLM grader judges it |
 
 The SQL guard and the restricted warehouse copy also get adversarial unit tests that run free on every push. The 100% safety target rests mainly on those tests.
 

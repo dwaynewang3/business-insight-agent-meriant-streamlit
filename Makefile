@@ -1,4 +1,4 @@
-.PHONY: data test-data cases test lint ask eval demo
+.PHONY: data test-data stress-data cases test lint ask eval demo
 
 data: ## Build the dev warehouse (data/dev.duckdb), its manifest, and the policy knowledge base
 	uv run python -m data.generator --scenario data/scenarios/dev.yaml
@@ -6,6 +6,9 @@ data: ## Build the dev warehouse (data/dev.duckdb), its manifest, and the policy
 
 test-data: ## Build the held-out test data (data/test.duckdb), scored once at the end
 	uv run python -m data.generator --scenario data/scenarios/test.yaml
+
+stress-data: ## Build the stress data (data/stress.duckdb): two causes, no cause in the data, a recode
+	uv run python -m data.generator --scenario data/scenarios/stress.yaml
 
 cases: ## Print every eval question
 	uv run python -m evals.cases
